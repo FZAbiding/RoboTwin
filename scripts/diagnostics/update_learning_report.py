@@ -59,6 +59,7 @@ def main():
         evaluation+='<p>诊断首个压力进程还暴露了独立的AF_UNIX路径过长错误；保留失败日志，改用/home下较短专用TMPDIR，并在长作业前实际建立本地socket验证。此问题不能直接解释先前SIGSEGV，根因仍待现场栈证据。</p>'
     if prior:
         evaluation+=f'<p>当前为全新重试目录；复用已冻结的比较/确认清单，没有重新抽选种子。两训练种子从头初始化，没有把权重加载称为优化器精确续训；模型、数据、训练更新预算及选择规则保持。仅新增worker故障观察与IPC检查。{link(Path(prior["failed_training"]),"原训练失败记录")} · {link(r/"snapshots/prior-study.json","重试差异记录")}</p>'
+        evaluation+=f'<p>新增诊断的真实短训练与关闭诊断的对照都完成6次更新，初始验证loss相同，更新后权重最大差约4.72e−5，不能声称位级一致。{link(r/"checks/diagnostic-smoke-audit.json","短训练验收")} · {link(r/"checks/smoke-numerical-comparison.json","观察器数值对照")} · {link(r/"checks/worker-resources.jsonl","worker CPU/内存/FD现场")}。资源采样只读取本任务父子进程，不修改CPU亲和性或全局配置。</p>'
     if comparison.get('models'):
         rows=[];bars=[]
         for i,v in enumerate(comparison['models']):
