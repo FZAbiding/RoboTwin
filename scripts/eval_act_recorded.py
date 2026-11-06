@@ -76,7 +76,8 @@ def main() -> None:
         cohort.install(native, int(args["test_num"]))
         state.update(result_kind="frozen expert-conditioned cohort; no repeated online expert gate",
                      frozen_manifest_sha256=cohort.sha256,
-                     frozen_manifest=str(cohort.path))
+                     frozen_manifest=str(cohort.path),
+                     frozen_cache_schedule=cohort.cache_schedule)
     observations: dict = {"seed": None, "phase": None}
     rpc_times: dict[str, list[float]] = {}
     model_times: dict[str, list[float]] = {}

@@ -31,6 +31,7 @@ class FrozenCohort:
             if hashlib.sha256(Path(row['path']).read_bytes()).hexdigest()!=row['path_sha256']:
                 raise ValueError('Frozen expert path changed')
         self.expected_seed=None
+        self.cache_schedule=[]
 
     def validate_setup(self,environment,seed,metrics):
         import numpy as np
@@ -66,12 +67,28 @@ class FrozenCohort:
             for key in ['embodiment','domain_randomization','camera','data_type','eval_mode']:
                 if args.get(key)!=expected.get(key):raise ValueError(f'Frozen scene configuration differs: {key}')
             base=Path(args['eval_video_save_dir']);successes=0
-            for row in self.rows:
+            for ordinal,row in enumerate(self.rows):
                 seed=int(row['seed']);self.expected_seed=seed
                 one=dict(args);directory=base/f'seed_{seed}';directory.mkdir(exist_ok=False)
                 one['eval_video_save_dir']=directory
-                next_seed,count=original(task_name,task_env,one,model_client,seed,usr_args=usr_args,
-                    test_num=1,video_size=video_size,instruction_type=instruction_type)
+                # The original loop clears at (completed_trials + 1) % period.
+                # A one-trial call resets that counter; preserve the global
+                # cadence while retaining forced cleanup on an incomplete trial.
+                clear_after_trial=(ordinal+2)%int(args['clear_cache_freq'])==0
+                original_close=task_env.close_env
+                def close_env(clear_cache=False):
+                    ended=bool(getattr(task_env,'eval_success',False)) or (
+                        getattr(task_env,'take_action_cnt',-1)>=getattr(task_env,'step_lim',float('inf')))
+                    actual_clear=clear_after_trial if ended else clear_cache
+                    self.cache_schedule.append({'seed':seed,'ordinal':ordinal,
+                        'episode_ended':ended,'native_single_trial_clear_request':bool(clear_cache),
+                        'clear_cache':bool(actual_clear)})
+                    return original_close(clear_cache=actual_clear)
+                task_env.close_env=close_env
+                try:
+                    next_seed,count=original(task_name,task_env,one,model_client,seed,usr_args=usr_args,
+                        test_num=1,video_size=video_size,instruction_type=instruction_type)
+                finally:task_env.close_env=original_close
                 if next_seed!=seed+1 or task_env.test_num!=1:
                     raise FrozenCohortViolation(f'Native evaluation skipped or retried frozen seed {seed}')
                 successes+=count

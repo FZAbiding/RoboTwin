@@ -60,6 +60,17 @@ def main():
     if prior:
         evaluation+=f'<p>当前为全新重试目录；复用已冻结的比较/确认清单，没有重新抽选种子。两训练种子从头初始化，没有把权重加载称为优化器精确续训；模型、数据、训练更新预算及选择规则保持。仅新增worker故障观察与IPC检查。{link(Path(prior["failed_training"]),"原训练失败记录")} · {link(r/"snapshots/prior-study.json","重试差异记录")}</p>'
         evaluation+=f'<p>新增诊断的真实短训练与关闭诊断的对照都完成6次更新，初始验证loss相同，更新后权重最大差约4.72e−5，不能声称位级一致。{link(r/"checks/diagnostic-smoke-audit.json","短训练验收")} · {link(r/"checks/smoke-numerical-comparison.json","观察器数值对照")} · {link(r/"checks/worker-resources.jsonl","worker CPU/内存/FD现场")}。资源采样只读取本任务父子进程，不修改CPU亲和性或全局配置。</p>'
+    manifests_audit=read(r/'checks/manifests-audit.json')
+    checkpoint_audit=read(r/'checks/checkpoint-s0-u3000-audit.json')
+    if manifests_audit or checkpoint_audit:
+        evidence_rows=[]
+        if manifests_audit:
+            evidence_rows.append(f'<tr><td>完整专家清单</td><td>200个种子与训练集及另一队列互不重叠；2400个轨迹数组均有限，评测配置和冻结证明一致</td><td>{link(r/"checks/manifests-audit.json","全清单验收")}</td></tr>')
+        if checkpoint_audit:
+            evidence_rows.append(f'<tr><td>种子0 · 3000更新</td><td>CPU重载344个有限张量、14维接口与原归一化一致；连续长训练尚在运行</td><td>{link(r/"checks/checkpoint-s0-u3000-audit.json","权重与统计验收")}</td></tr>')
+        evaluation+='<figure><div class="ve-table"><table><thead><tr><th>提前完成的检查</th><th>实际结论</th><th>证据</th></tr></thead><tbody>'+''.join(evidence_rows)+'</tbody></table></div><figcaption>完整清单和中间权重已独立核查；它们不能替代六千轮轨迹完成及真实策略闭环。</figcaption></figure>'
+    if (r/'checks/evaluation-contract-review.json').exists():
+        evaluation+=f'<p>输入时序复核：save_freq=15是专家路径采样步距，frequency=30是当前ACT不读取的元数据，真实动作由250Hz原生TOPP路径推进。固定队列逐种子调用会重置缓存计数，现按全局回合序号恢复原清理节奏并保留异常强制清理；未改动作、模型输入或任务判据。{link(r/"checks/evaluation-contract-review.json","时序与缓存复核")}。缓存标志回归不是物理策略成绩，真实长队列释放仍由后续逐回合审计确认。</p>'
     if comparison.get('models'):
         rows=[];bars=[]
         for i,v in enumerate(comparison['models']):

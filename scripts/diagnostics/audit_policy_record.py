@@ -32,6 +32,13 @@ def main():
         start = 100000 * (1 + int(config['native_args']['seed']))
         assert [v['seed'] for v in state['candidates']] == list(range(start, start+config['max_candidate_seeds']))
     else: assert len(state['trials']) == config['native_args']['test_num']
+    if config.get('frozen_expert_manifest') and 'frozen_cache_schedule' in state:
+        proof=json.loads(Path(config['frozen_expert_manifest']).read_text())
+        period=int(proof['task_config']['clear_cache_freq']);schedule=state['frozen_cache_schedule']
+        assert len(schedule)==len(state['trials'])
+        assert [row['seed'] for row in schedule]==[row['seed'] for row in state['trials']]
+        assert all(row['episode_ended'] and row['clear_cache']==((i+2)%period==0)
+                   for i,row in enumerate(schedule))
     actions = collections.Counter(); top_calls = collections.Counter(); actual_top_errors = 0
     final_predicates = {}; snapshots = {}; resets = 0
     with (record/'events.jsonl').open() as file:
