@@ -58,6 +58,8 @@ class FrozenCohort:
 
         def evaluate(task_name,task_env,args,model_client,st_seed,*,usr_args,test_num,
                      video_size=None,instruction_type=None):
+            if task_name!=self.manifest['task_name']:
+                raise ValueError('Frozen cohort belongs to a different task')
             if usr_args.get('expert_check') is not False:
                 raise ValueError('Frozen evaluation uses its preverified expert proof, without a new expert gate')
             expected=self.manifest['task_config']

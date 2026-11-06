@@ -23,6 +23,8 @@ def main():
     if comparison:
         details=f'<p>重复两轮的专家接纳集合变化数：原生{comparison["baseline_replica_eligibility_changes"]}，重置{comparison["reset_replica_eligibility_changes"]}。候选队列相同，模型固定；策略成功数会随专家接纳集合变化，不能把条件成功率变化当作模型学习提升。{link(r/"checks/control-comparison.json","逐种子与轨迹哈希比较")}</p>'
         details+='<p>重置两轮均接纳21个种子、策略13成功；原生两轮分别19个接纳/11成功与20个接纳/12成功。共同接纳种子的策略成功和动作数不变。四轮的23个base1候选均未通过原生专家筛选。重置仅提高本次接纳集合的观察重复性，不能据两次重复宣称确定性或解决base1问题；专家路径数值与形状仍有差异，不能用接纳集合相同替代轨迹重复。</p>'
+        if (r/'checks/reset-learner-numerical.json').exists():
+            details+=f'<p>逐动作数值复核：原生重复共同19种子、重置重复21种子的ACT动作与左右臂实际关节位置最大差均为0。专家路径波动与策略闭环重复性分别记录。{link(r/"checks/baseline-learner-numerical.json","原生策略数值比较")} · {link(r/"checks/reset-learner-numerical.json","重置策略数值比较")}</p>'
     query=read(r/'planner-query-r2/summary.json')
     if query.get('status')=='complete':
         count=sum(bool(v['success']) for v in query['queries'])
