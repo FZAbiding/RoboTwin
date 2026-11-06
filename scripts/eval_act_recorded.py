@@ -16,6 +16,10 @@ import traceback
 ROOT = Path(__file__).resolve().parents[1]
 
 
+class CandidateAuditComplete(BaseException):
+    """End a bounded native candidate audit between completed episodes."""
+
+
 def write_json(path: Path, value: object) -> None:
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(json.dumps(value, indent=2), encoding="utf-8")
@@ -27,6 +31,12 @@ def main() -> None:
     parser.add_argument("--config", type=Path, required=True)
     options = parser.parse_args()
     config = json.loads(options.config.read_text())
+    if config.get("candidate_audit", False):
+        budget = int(config["max_candidate_seeds"])
+        if budget < 1 or int(config["native_args"]["test_num"]) <= budget:
+            raise ValueError("Candidate audit requires test_num above the finite candidate budget")
+        if config["native_args"].get("expert_check", True) is not True:
+            raise ValueError("Candidate audit retains the native expert check")
     record = Path(config["record_dir"]).resolve()
     record.mkdir(parents=True, exist_ok=False)
     os.chdir(ROOT)
@@ -72,7 +82,9 @@ def main() -> None:
         assert diagnostic_spec is not None and diagnostic_spec.loader is not None
         diagnostic_module = importlib.util.module_from_spec(diagnostic_spec)
         diagnostic_spec.loader.exec_module(diagnostic_module)
-        diagnostic_observer = diagnostic_module.Observer(event)
+        observer_options = config.get("diagnostic_options")
+        diagnostic_observer = (diagnostic_module.Observer(event) if observer_options is None
+                               else diagnostic_module.Observer(event, observer_options))
 
     def class_decorator(task_name):
         environment = factory(task_name)
@@ -87,6 +99,8 @@ def main() -> None:
                 raise KeyboardInterrupt(f"Evaluation seed overlaps collected data: {seed}")
             if seed not in seen:
                 if len(seen) >= int(config.get("max_candidate_seeds", 200)):
+                    if config.get("candidate_audit", False):
+                        raise CandidateAuditComplete("Requested candidate audit budget completed")
                     raise KeyboardInterrupt("Evaluation candidate seed budget exhausted")
                 seen[seed] = 0
                 candidates[seed] = {"seed": seed}
@@ -265,6 +279,19 @@ def main() -> None:
         state.update(status="complete", successes=sum(bool(row["success"]) for row in trials))
         output = Path(state["upstream_output"])
         assert (output / "_result.txt").is_file()
+        (record / "upstream-output").symlink_to(output, target_is_directory=True)
+    except CandidateAuditComplete:
+        assert config.get("candidate_audit", False)
+        assert len(state["candidates"]) == int(config["max_candidate_seeds"])
+        assert not state["rpc_errors"] and not state["simulation_errors"]
+        state.update(
+            status="candidate_audit_complete",
+            successes=sum(bool(row["success"]) for row in state["trials"]),
+            result_kind="bounded candidate audit; native benchmark test_num was not completed",
+        )
+        event("candidate_audit_complete", candidates=len(state["candidates"]),
+              completed_learner_trials=len(state["trials"]), successes=state["successes"])
+        output = Path(state["upstream_output"])
         (record / "upstream-output").symlink_to(output, target_is_directory=True)
     except BaseException:
         state.update(status="failed", error=traceback.format_exc())
