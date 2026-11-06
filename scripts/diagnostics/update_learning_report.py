@@ -50,6 +50,15 @@ def main():
     (r/'status.json').write_text(json.dumps(phase,indent=2))
     comparison=read(r/'checks/comparison-results.json');confirmation=read(r/'checks/confirmation-results.json')
     evaluation=''
+    followup=read(r/'checks/worker-failure-followup.json')
+    prior=read(r/'snapshots/prior-study.json')
+    if followup:
+        diagnostic=Path(followup['diagnostic_run'])
+        stress=read(diagnostic/'native-reader-2/status.json')
+        evaluation+=f'<p>长训练首尝试因worker SIGSEGV在445个完整epoch、1336次更新处失败；监督器与模型比较按设计停止，未生成新策略成绩。新诊断记录worker原生故障栈及最后样本，注入故障和随机样本不变两项回归通过；原50+派生50个HDF5哈希不变。GPU外原生读取压力验证：{esc(stress.get("status","待运行"))}，{stress.get("epochs",0)}轮/{stress.get("samples",0)}样本。{link(diagnostic/"checks/data-hash-audit.json","数据哈希")} · {link(diagnostic/"logs/diagnostics-regression.log","故障记录回归")} · {link(diagnostic/"native-reader-2/status.json","原生读取压力状态")}</p>'
+        evaluation+='<p>诊断首个压力进程还暴露了独立的AF_UNIX路径过长错误；保留失败日志，改用/home下较短专用TMPDIR，并在长作业前实际建立本地socket验证。此问题不能直接解释先前SIGSEGV，根因仍待现场栈证据。</p>'
+    if prior:
+        evaluation+=f'<p>当前为全新重试目录；复用已冻结的比较/确认清单，没有重新抽选种子。两训练种子从头初始化，没有把权重加载称为优化器精确续训；模型、数据、训练更新预算及选择规则保持。仅新增worker故障观察与IPC检查。{link(Path(prior["failed_training"]),"原训练失败记录")} · {link(r/"snapshots/prior-study.json","重试差异记录")}</p>'
     if comparison.get('models'):
         rows=[];bars=[]
         for i,v in enumerate(comparison['models']):
@@ -58,7 +67,7 @@ def main():
             y=25+i*38
             bars.append(f'<text x="0" y="{y+12}" fill="currentColor" font-size="12">{esc(label)}</text><rect x="165" y="{y}" width="300" height="18" fill="currentColor" opacity="0.12"/><rect x="165" y="{y}" width="{v["successes"]*3}" height="18" fill="currentColor"/><text x="475" y="{y+12}" fill="currentColor" font-size="12">{v["successes"]}/100</text>')
         height=50+38*len(bars)
-        evaluation=f'<figure><svg viewBox="0 0 550 {height}" role="img" aria-label="冻结比较队列的各检查点真实成功数">'+''.join(bars)+'</svg><figcaption>同一100个专家验证场景逐模型比较；条形长度表示真实策略成功数，不能解释为无条件任务成功率。</figcaption></figure><figure><div class="ve-table"><table><thead><tr><th>检查点</th><th>比较集成功</th><th>证据</th></tr></thead><tbody>'+''.join(rows)+'</tbody></table></div><figcaption>保留全部已执行模型及失败场景，按预登记规则选择预算。</figcaption></figure>'
+        evaluation+=f'<figure><svg viewBox="0 0 550 {height}" role="img" aria-label="冻结比较队列的各检查点真实成功数">'+''.join(bars)+'</svg><figcaption>同一100个专家验证场景逐模型比较；条形长度表示真实策略成功数，不能解释为无条件任务成功率。</figcaption></figure><figure><div class="ve-table"><table><thead><tr><th>检查点</th><th>比较集成功</th><th>证据</th></tr></thead><tbody>'+''.join(rows)+'</tbody></table></div><figcaption>保留全部已执行模型及失败场景，按预登记规则选择预算。</figcaption></figure>'
     if confirmation:
         evaluation+=f'<p>独立确认：所选模型{confirmation["selected"]["successes"]}/100，同训练种子3k更新基线{confirmation["same_seed_3000_update_baseline"]["successes"]}/100；配对新增成功{confirmation["paired_wins"]}，新增失败{confirmation["paired_losses"]}，差值{confirmation["success_difference_percentage_points"]}个百分点，精确双侧配对检验p={confirmation["paired_exact_two_sided_p"]:.6g}。若检查点相同，未发生预算提升比较。{link(r/"checks/confirmation-results.json","确认逐种子结果")}</p>'
     section='learning-study-20261106'

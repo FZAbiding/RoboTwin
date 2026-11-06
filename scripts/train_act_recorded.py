@@ -130,17 +130,26 @@ def main() -> None:
         train, validation, stats, is_sim = result
         loader_options = config.get("data_loader", {})
         if loader_options:
+            from scripts.act_worker_diagnostics import probe_worker_ipc
+            state['worker_ipc_preflight'] = probe_worker_ipc()
             from torch.utils.data import DataLoader
             context = loader_options.get("multiprocessing_context", "spawn")
             persistent = bool(loader_options.get("persistent_workers", True))
+            worker_init = None
+            if loader_options.get("worker_diagnostics", False):
+                from scripts.act_worker_diagnostics import initialize_worker
+                worker_init = initialize_worker
+                os.environ['ROBOTWIN_ACT_WORKER_DIAGNOSTICS'] = str(record_dir / 'workers')
             def rebuild(loader):
+                if worker_init is not None and loader.worker_init_fn is not None:
+                    raise ValueError('Worker diagnostics must preserve any custom initializer explicitly')
                 if loader.num_workers < 1:
                     raise ValueError("Explicit multiprocessing context requires at least one worker")
                 return DataLoader(loader.dataset, batch_size=loader.batch_size,
                     sampler=loader.sampler, num_workers=loader.num_workers,
                     collate_fn=loader.collate_fn, pin_memory=loader.pin_memory,
                     drop_last=loader.drop_last, timeout=loader.timeout,
-                    worker_init_fn=loader.worker_init_fn, generator=loader.generator,
+                    worker_init_fn=worker_init or loader.worker_init_fn, generator=loader.generator,
                     prefetch_factor=loader.prefetch_factor, persistent_workers=persistent,
                     multiprocessing_context=context)
             train, validation = rebuild(train), rebuild(validation)

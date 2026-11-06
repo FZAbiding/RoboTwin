@@ -1,0 +1,31 @@
+{
+  "record_dir": "/home/xense/src/RoboTwin/data/local-runs/learning-study-r2-20261107-011547/observer-control-supervisor",
+  "python_prefix": "/home/xense/miniforge3/envs/robotwin",
+  "cwd": "/home/xense/src/RoboTwin",
+  "gpu": 0,
+  "minimum_free_disk_gib": 4,
+  "previous_gpu_wall_seconds": 10761.055519,
+  "gpu_budget_seconds": 172800,
+  "prior_time_accounting": "Conservative elapsed wall-time upper bound since this authorization phase; includes idle and preparation.",
+  "environment": {
+    "OPENBLAS_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "TMPDIR": "/home/xense/src/RoboTwin/data/tmp/ls2-20261107-011547"
+  },
+  "jobs": [
+    {
+      "name": "observer-control-smoke",
+      "arguments": [
+        "scripts/train_act_recorded.py",
+        "--config",
+        "/home/xense/src/RoboTwin/data/local-runs/learning-study-r2-20261107-011547/configs/observer-control-smoke.json"
+      ],
+      "heartbeat": "/home/xense/src/RoboTwin/data/local-runs/learning-study-r2-20261107-011547/training/observer-control-smoke/status.json",
+      "result_status": "/home/xense/src/RoboTwin/data/local-runs/learning-study-r2-20261107-011547/training/observer-control-smoke/status.json",
+      "timeout_seconds": 300,
+      "stall_seconds": 180,
+      "stack_diagnostics": true
+    }
+  ]
+}
