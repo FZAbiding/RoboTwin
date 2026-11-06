@@ -1,0 +1,39 @@
+{
+  "status": "preregistered conditional execution plan",
+  "authorization": "Local commits only; no remote push or PR. Up to48GPUhours, with progress reports and complete failed-attempt records.",
+  "planning_phase": {
+    "fixed_candidate_range": [100000, 100048],
+    "conditions_in_order": ["baseline-1", "reset-1", "baseline-2", "reset-2"],
+    "learner_checkpoint_sha256": "08429b6e19f482cb166a468c932e81a423db00544d4b7341c76b403b740ffa3c",
+    "adoption": "Do not call reset a proven fix without comparing repeatability and physical task outcomes. Diagnose frozen batch/single query mismatch separately, including endpoint validity and timing refinement. Do not change task or joint-limit tolerances."
+  },
+  "training_curve": {
+    "data": "same original50verified episodes; no source HDF5 edits",
+    "training_seeds": [0, 1],
+    "native_split": "same40train/10validation episodes, native data RNGseed1",
+    "optimizer_update_checkpoints": [3000, 9000, 18000],
+    "epochs_for_original_data": [1000, 3000, 6000],
+    "batch_size": 16,
+    "learning_rate": 0.00001,
+    "chunk_size": 50,
+    "hidden_dim": 512,
+    "dim_feedforward": 3200,
+    "kl_weight": 10,
+    "temporal_aggregation": true,
+    "normalization": "native all50episodes and last-frame padding, identical for each checkpoint; disclose validation inclusion",
+    "method": "one uninterrupted native training trajectory per seed; compare its checkpoints so initial weights, optimizer history and data contract remain fixed within each seed"
+  },
+  "evaluation": {
+    "comparison_manifest": {"start_seed": 300000, "expert_successes": 100, "max_candidates": 500},
+    "confirmation_manifest": {"start_seed": 400000, "expert_successes": 100, "max_candidates": 500},
+    "eligibility": "Freeze native expert physically successful and planned-joint-legal seed/path manifests before learner evaluation. Preserve original task predicate and initial distribution; record actual instance composition. Reuse manifest eligibility instead of rerunning a variable expert gate for each policy.",
+    "selection": "Compare all three budgets across both training seeds on the comparison manifest. Select the budget with highest mean success, tie favoring fewer updates. Within it select higher comparison success, tie lower seed. Report all models, not only the selected one.",
+    "confirmation": "On the separate untouched confirmation manifest evaluate the selected model and its same-training-seed3000update baseline. If they are the same checkpoint, run it once and do not claim a budget improvement.",
+    "reporting": "Paired seed outcomes and per-instance coverage, original thresholds, failures, actual actions, videos, native fallbacks, exit codes and checkpoint hashes. Repeated seed cohorts are not independent new test samples."
+  },
+  "conditional_data_extension": {
+    "trigger": "If budget-only training leaves a clear grasp/coverage bottleneck, collect50new verified demonstrations from seeds1000upward, disjoint from both evaluation manifests and original training.",
+    "comparison": "Add new data as a separate factor; retain the original10validation episodes and compare at matched optimizer update budgets. Do not combine an unvalidated planner/asset change with this comparison.",
+    "resources": "Check free disk before capture/conversion; preserve640x480RGB and use losslessLZF. Use new namespaces, preserve original raw files and all failed attempts."
+  }
+}

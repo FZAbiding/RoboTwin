@@ -14,6 +14,7 @@ import re
 import traceback
 import os
 import time
+from scripts.collection_io import write_seed_list
 from argparse import ArgumentParser
 
 from description.utils.generate_episode_instructions import generate_episode_descriptions
@@ -151,7 +152,12 @@ def main(task_name=None, task_config=None):
 
 
 def run(TASK_ENV, args):
-    epid, suc_num, fail_num, seed_list = 0, 0, 0, []
+    start_seed = int(args.get("start_seed", 0))
+    max_attempts = args.get("max_seed_attempts")
+    if start_seed < 0 or (max_attempts is not None and int(max_attempts) < 1):
+        raise ValueError("start_seed must be nonnegative and max_seed_attempts must be positive")
+    epid, suc_num, fail_num, seed_list = start_seed, 0, 0, []
+    attempts = 0
 
     print(f"Task Name: \033[34m{args['task_name']}\033[0m")
 
@@ -172,6 +178,9 @@ def run(TASK_ENV, args):
             print(f"Exist seed file, Start from: {epid} / {suc_num}")
 
         while suc_num < args["episode_num"]:
+            if max_attempts is not None and attempts >= int(max_attempts):
+                raise RuntimeError(f"Expert candidate budget exhausted after {attempts} attempts")
+            attempts += 1
             try:
                 TASK_ENV.setup_demo(now_ep_num=suc_num, seed=epid, **args)
                 TASK_ENV.play_once()
@@ -223,9 +232,7 @@ def run(TASK_ENV, args):
 
             epid += 1
 
-            with open(os.path.join(args["save_path"], "seed.txt"), "w") as file:
-                for sed in seed_list:
-                    file.write("%s " % sed)
+            write_seed_list(os.path.join(args["save_path"], "seed.txt"), seed_list)
 
         print(f"\nComplete simulation, failed \033[91m{fail_num}\033[0m times / {epid} tries \n")
     else:

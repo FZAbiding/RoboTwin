@@ -70,3 +70,7 @@ mamba run -n robotwin python scripts/diagnostics/expert_query_probe.py \
 `run_policy_experiments.py` 串行管理官方模型服务与真实评测子进程，记录PID、权重/源码哈希、超时、磁盘保护及GPU占用时长。`planner_audit_observer.py` 按条件重置并保存原生专家路径副本；`audit_policy_record.py` 验证候选序列、真实动作、成功条件、视频和路径哈希。
 
 候选资格稳定性、专家物理成功、轨迹数值重复性和策略成功分别报告。后续若采纳规划器代码修复，须另做原生入口回归和新数据验证；不能用新实验覆盖旧成绩。
+
+后续条件执行方案预先记录于 `experiments/plans/20261106-policy-improvement.json`：原50条数据、两训练种子、3k/9k/18k优化更新的原生训练轨迹检查点；新专家验证比较清单与最终确认清单分别从300000、400000起，筛选资格预先冻结，避免各策略重新筛选换队列。仅在证据支持时扩充数据，并独立比较。
+
+原生采集现在支持可选 `start_seed`（默认0）和 `max_seed_attempts`（默认不限）。成功、关节合法性和回放判据不变。`seed.txt` 使用同目录临时文件、flush/fsync和原子替换；替换失败会保留旧清单和待恢复临时文件。回归测试覆盖原格式和故障注入，防止重现历史断点损坏。
