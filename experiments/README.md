@@ -78,3 +78,32 @@ mamba run -n robotwin python scripts/diagnostics/expert_query_probe.py \
 长训练记录器新增可选 `checkpoint_update_steps`，在真实优化器完成更新后原子保存模型权重、更新数和SHA256；默认配置不新增检查点。它不恢复优化器状态，不能把模型权重加载伪装成精确续训。预注册学习曲线将使用每个种子的一条连续训练轨迹。
 
 可选 `data_loader` 配置使用spawn和持久worker，保留原数据集、采样器、batch、归一化与原生训练循环；整组新预算采用同一协议，并重新得到其1k epoch参考点。它与历史原生worker协议不是位级复现关系。实际2轮训练、更新数、检查点和worker PID验收通过后才启动长训练；后续原生卡住由SIGUSR1栈诊断和监督器如实记录。
+
+## 2026-11-06 执行结果与持续运行
+
+四组49候选对照均已结束并通过逐动作、视频和原任务判据审计。原生两轮分别接纳19/20、策略成功11/12；重置两轮均接纳21、成功13。共同接纳种子的成功和动作数相同。原生重复的接纳集合差1个种子，重置重复差0个；专家轨迹长度和数值仍有差异，不能宣称全链路确定性。四轮的23个base1候选均未通过原生专家筛选。未把重置变体合并进任务或机器人源码。
+
+冻结100001起点/目标后，原生批量成功路径裁剪至528有效步，末端位置误差约2微米；原始批量输出按5000步填充，不能按填充数组长度选择最短路径。单目标时间细化尺度0.85、0.9、0.95、1.0、1.05各重复2次，0/10成功，均为FINETUNE_TRAJOPT_FAIL。这否定了本次简单时间尺度调整即可修复的假设，但尚未定位全部根因或验证批量路径完整物理可行性。
+
+新增查询记录器首轮把单目标二维轨迹按批量切片，触发“JointState does not have horizon”；仅修正批量提取分支，在`planner-query-r2`新目录重跑完成。原失败日志与退出码保留。一次回归命令误用base Python3.13，因缺Torch导入失败；改为已确认的robotwin Python3.10后两项ACT对齐回归通过，没有向base安装依赖。
+
+新学习实验目录为 `data/local-runs/learning-study-20261106-225739/`。运行前真实验收已通过：2轮训练/6次优化更新、第3次更新权重保存且有限、数据worker PID跨轮复用；两专家种子原生筛选通过；同模型两次冻结队列闭环均2/2成功、每次178动作，初态与动作最大差0，视频完整。它们是工程试跑，不是新模型提升成绩。
+
+`collect_expert_manifest.py` 观察原生collector决定接纳与保存路径，清单记录全部候选、原生规划/物理/关节合法性、场景初态和源码/资产/路径SHA256。`frozen_expert_cohort.py` 在每个指定种子上调用原生`eval_remote_policy(test_num=1)`，保持原生动作和WebSocket循环；按种子隔离视频，重用冻结专家的语言信息，并拒绝指定种子被跳过或替换。专家真值用于资格和诊断，不进入ACT输入。该协议明确区别于每个模型重新运行专家筛选的普通基准。
+
+专家清单采用eval_mode=true，与学习策略场景匹配；lift_pot本身忽略is_test参数，固定配置关闭背景随机化。此等价性限定于当前任务与配置；不能直接推广到其他任务。每回合检查资产、锅位姿、操作点、TCP和夹爪初态，与冻结证明误差必须≤1e−8。
+
+`run_research_jobs.py` 串行采集比较/确认各100个成功专家，再训练种子0、1各6000轮。采集每组最多500候选；训练单作业15000秒上限，120秒无进展发SIGUSR1、240秒无进展终止本任务进程组。GPU总预算172800秒，先前阶段以包含准备/空闲的保守墙钟上界计入；只有本任务作业被管理。
+
+`run_learning_evaluation.py` 等待训练监督器通过后，验证六个权重有限、数据原件哈希不变、两种子划分和归一化一致，再启动六检查点×比较100回合及所选模型/同种子3k基线×独立确认100回合。若预算选择仍为3k，只运行一次确认并明确没有预算提升。每组真实评测后检查动作、原判据、TOPP调用、视频解码和逐种子结果；失败即停止并保留日志。比较结果、选择规则和确认结果写入checks，报告每分钟刷新。
+
+有效命令与本机路径参数快照保存于 `experiments/configs/learning-study-20261106-225739/`。迁移/重跑须修改到新目录；已有目录均拒绝覆盖，训练权重不是包含优化器状态的精确续训断点。
+
+```bash
+source data/local-runs/fullchain-20261105-005503/env.sh
+export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
+/home/xense/miniforge3/envs/robotwin/bin/python -u scripts/run_research_jobs.py --config /path/to/new-supervisor.json
+/home/xense/miniforge3/envs/robotwin/bin/python -u scripts/run_learning_evaluation.py --run-dir /path/to/new-study
+```
+
+实际状态以新目录的 `supervisor/status.json`、`evaluation-pipeline/status.json` 和逐作业日志为准。总报告新增 `#planner-controls-20261106` 与 `#learning-study-20261106`，包含已完成证据及排队状态。长训练、模型比较和独立确认尚未完成前，不发布提升结论。

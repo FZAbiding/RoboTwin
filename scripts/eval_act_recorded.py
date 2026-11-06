@@ -47,6 +47,12 @@ def main() -> None:
 
     source_rows = json.loads(Path(config["source_manifest"]).read_text())
     data_seeds = {int(row["seed"]) for row in source_rows}
+    cohort = None
+    if config.get("frozen_expert_manifest"):
+        if config.get("candidate_audit"):
+            raise ValueError("Frozen cohort and candidate audits are separate protocols")
+        from scripts.frozen_expert_cohort import FrozenCohort
+        cohort = FrozenCohort(config["frozen_expert_manifest"], ROOT, data_seeds)
     args = dict(config["native_args"])
     args.setdefault("xpolicylab_root", str(ROOT / "XPolicyLab"))
     if args.get("protocol", "ws") != "ws" or args.get("eval_batch"):
@@ -66,6 +72,11 @@ def main() -> None:
         "actions_executed": 0,
         "execution_diagnostics": {},
     }
+    if cohort is not None:
+        cohort.install(native, int(args["test_num"]))
+        state.update(result_kind="frozen expert-conditioned cohort; no repeated online expert gate",
+                     frozen_manifest_sha256=cohort.sha256,
+                     frozen_manifest=str(cohort.path))
     observations: dict = {"seed": None, "phase": None}
     rpc_times: dict[str, list[float]] = {}
     model_times: dict[str, list[float]] = {}
@@ -115,12 +126,25 @@ def main() -> None:
                 raise
             if diagnostic_observer is not None:
                 diagnostic_observer.on_setup(environment, phase, seed)
+            if cohort is not None:
+                if diagnostic_observer is None:
+                    raise ValueError("Frozen initial-state verification requires a diagnostic observer")
+                candidates[seed]["initial_state_max_difference"] = cohort.validate_setup(
+                    environment, seed, diagnostic_observer.metrics)
             if hasattr(environment, "model_name"):
                 candidates[seed]["model_name"] = str(environment.model_name)
             if hasattr(environment, "model_id"):
                 candidates[seed]["model_id"] = int(environment.model_id)
             if phase == "learner":
-                candidates[seed]["admitted_by_native_expert_gate"] = True
+                if cohort is None:
+                    candidates[seed]["admitted_by_native_expert_gate"] = bool(args.get("expert_check", True))
+                else:
+                    proof = cohort.by_seed[seed]
+                    candidates[seed].update(admitted_by_frozen_expert_manifest=True,
+                        expert_plan_success=proof["expert_plan_success"],
+                        expert_task_success=proof["expert_task_success"],
+                        planned_joints_legal=proof["planned_joints_legal"],
+                        expert_path_sha256=proof["path_sha256"])
                 if config.get("record_execution_detail", False):
                     state["execution_diagnostics"][str(seed)] = {
                         "left": {"topp_calls": 0, "topp_errors": 0, "empty_paths": 0, "nonfinite_paths": 0, "max_measured_step_delta": 0.0},
@@ -305,7 +329,7 @@ def main() -> None:
                 for method, values in groups.items()
             }
         for candidate in state["candidates"]:
-            if not candidate.get("admitted_by_native_expert_gate"):
+            if cohort is None and not candidate.get("admitted_by_native_expert_gate"):
                 candidate["skipped_by_native_gate"] = True
         write_json(record / "status.json", state)
 

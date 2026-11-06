@@ -65,7 +65,8 @@ def main():
         state['checkpoint_sha256'] = hashlib.sha256((checkpoint / 'policy_last.ckpt').read_bytes()).hexdigest()
         state['root_commit'] = subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip()
         state['source_hashes'] = {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in
-             ['scripts/eval_act_recorded.py', 'scripts/diagnostics/lift_pot_observer.py',
+             ['scripts/eval_act_recorded.py', 'scripts/frozen_expert_cohort.py',
+              'scripts/eval_policy_xpolicylab.py', 'scripts/diagnostics/lift_pot_observer.py',
               'scripts/diagnostics/planner_audit_observer.py', 'envs/robot/robot.py', 'envs/_base_task.py']}
         command = [sys.executable, '-X', 'faulthandler', '-u', 'XPolicyLab/setup_policy_server.py',
                    '--config_path', config['policy_config'], '--overrides',

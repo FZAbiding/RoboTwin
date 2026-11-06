@@ -1,0 +1,144 @@
+{
+  "snapshot_at": "2026-11-06T23:13:49",
+  "status": "controlled planning and prerequisites complete; extended training study running",
+  "local_only": true,
+  "planning_controls": {
+    "baseline-1": {
+      "candidates": 49,
+      "learner_trials": 19,
+      "successes": 11,
+      "actions": 4170,
+      "resets": 0,
+      "topp_errors": 10,
+      "by_model": {
+        "base0:admitted": 19,
+        "base1:rejected": 23,
+        "base0:rejected": 7
+      }
+    },
+    "reset-1": {
+      "candidates": 49,
+      "learner_trials": 21,
+      "successes": 13,
+      "actions": 4354,
+      "resets": 69,
+      "topp_errors": 11,
+      "by_model": {
+        "base0:admitted": 21,
+        "base1:rejected": 23,
+        "base0:rejected": 5
+      }
+    },
+    "baseline-2": {
+      "candidates": 49,
+      "learner_trials": 20,
+      "successes": 12,
+      "actions": 4259,
+      "resets": 0,
+      "topp_errors": 10,
+      "by_model": {
+        "base0:admitted": 20,
+        "base1:rejected": 23,
+        "base0:rejected": 6
+      }
+    },
+    "reset-2": {
+      "candidates": 49,
+      "learner_trials": 21,
+      "successes": 13,
+      "actions": 4354,
+      "resets": 69,
+      "topp_errors": 11,
+      "by_model": {
+        "base0:admitted": 21,
+        "base1:rejected": 23,
+        "base0:rejected": 5
+      }
+    }
+  },
+  "eligibility_replica_changes": {
+    "baseline": 1,
+    "reset": 0
+  },
+  "limitations": [
+    "Only two repeats; no general determinism claim.",
+    "Original expert-conditioned cohorts and current fixed-cohort protocol are distinct.",
+    "No base1 coverage or overall model improvement is established."
+  ],
+  "frozen_query": {
+    "seed": 100001,
+    "batch_endpoint_audit": [
+      {
+        "matched_index": 1,
+        "matched_success": true,
+        "batch_status": "None",
+        "start_max_difference": 0.0,
+        "goal_max_position_difference": 0.0,
+        "goal_max_quaternion_difference": 0.0,
+        "raw_padded_shape": [
+          10,
+          5000,
+          6
+        ],
+        "valid_path_steps": [
+          538,
+          528,
+          534,
+          522,
+          517,
+          521,
+          507,
+          526,
+          525,
+          525
+        ],
+        "all_trimmed_path_lengths": [
+          538,
+          528,
+          534,
+          522,
+          517,
+          521,
+          507,
+          526,
+          525,
+          525
+        ],
+        "endpoint_position_error_m": [
+          2.026044285230455e-06
+        ],
+        "endpoint_orientation_geodesic_rad": [
+          0.0
+        ],
+        "path_finite": true
+      }
+    ],
+    "query_successes": 0,
+    "queries": 10,
+    "no_query_paths_executed": true
+  },
+  "prerequisites": {
+    "passed": true,
+    "frozen_smoke": {
+      "trials_per_repeat": 2,
+      "successes_per_repeat": 2,
+      "initial_state_max_difference": 0.0,
+      "action_max_difference": 0,
+      "real_actions_per_repeat": 178,
+      "native_loop_used": true
+    },
+    "training_smoke": {
+      "epochs": 2,
+      "updates": 6,
+      "checkpoint_at_update": 3,
+      "finite_weights": true,
+      "same_worker_pids_across_epochs": true
+    },
+    "planning_query": "Completed in planner-query-r2; first recorder failure preserved; no planner or task change adopted"
+  },
+  "study_run_dir": "/home/xense/src/RoboTwin/data/local-runs/learning-study-20261106-225739",
+  "active_status_files": [
+    "/home/xense/src/RoboTwin/data/local-runs/learning-study-20261106-225739/supervisor/status.json",
+    "/home/xense/src/RoboTwin/data/local-runs/learning-study-20261106-225739/evaluation-pipeline/status.json"
+  ]
+}

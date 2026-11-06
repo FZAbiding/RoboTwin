@@ -1,0 +1,6 @@
+{
+  "task_name": "lift_pot",
+  "task_config": "local_lift_pot_confirmation_20261106_225739",
+  "python_prefix": "/home/xense/miniforge3/envs/robotwin",
+  "record_dir": "/home/xense/src/RoboTwin/data/local-runs/learning-study-20261106-225739/manifests/confirmation"
+}

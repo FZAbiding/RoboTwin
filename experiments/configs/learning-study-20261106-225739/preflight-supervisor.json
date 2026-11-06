@@ -1,0 +1,59 @@
+{
+  "record_dir": "/home/xense/src/RoboTwin/data/local-runs/learning-study-20261106-225739/preflight-supervisor",
+  "python_prefix": "/home/xense/miniforge3/envs/robotwin",
+  "cwd": "/home/xense/src/RoboTwin",
+  "gpu": 0,
+  "minimum_free_disk_gib": 4,
+  "previous_gpu_wall_seconds": 2821.218787,
+  "gpu_budget_seconds": 172800,
+  "prior_time_accounting": "Conservative elapsed wall-time upper bound since this authorization phase; includes idle and preparation.",
+  "environment": {
+    "OPENBLAS_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "TMPDIR": "/home/xense/src/RoboTwin/data/local-runs/learning-study-20261106-225739/tmp"
+  },
+  "jobs": [
+    {
+      "name": "planner-query-r2",
+      "arguments": [
+        "scripts/diagnostics/planner_query_diagnostics.py",
+        "--config",
+        "/home/xense/src/RoboTwin/data/local-runs/planner-controls-20261106-221626/configs/baseline-1.json",
+        "--record-dir",
+        "/home/xense/src/RoboTwin/data/local-runs/planner-controls-20261106-221626/planner-query-r2",
+        "--seed",
+        "100001"
+      ],
+      "heartbeat": "/home/xense/src/RoboTwin/data/local-runs/planner-controls-20261106-221626/planner-query-r2/summary.json",
+      "result_status": "/home/xense/src/RoboTwin/data/local-runs/planner-controls-20261106-221626/planner-query-r2/summary.json",
+      "timeout_seconds": 240,
+      "stall_seconds": 180
+    },
+    {
+      "name": "training-smoke",
+      "arguments": [
+        "scripts/train_act_recorded.py",
+        "--config",
+        "/home/xense/src/RoboTwin/data/local-runs/planner-controls-20261106-221626/configs/training-smoke.json"
+      ],
+      "heartbeat": "/home/xense/src/RoboTwin/data/local-runs/planner-controls-20261106-221626/training/training-smoke/status.json",
+      "result_status": "/home/xense/src/RoboTwin/data/local-runs/planner-controls-20261106-221626/training/training-smoke/status.json",
+      "timeout_seconds": 300,
+      "stall_seconds": 180,
+      "stack_diagnostics": true
+    },
+    {
+      "name": "manifest-smoke",
+      "arguments": [
+        "scripts/collect_expert_manifest.py",
+        "--config",
+        "/home/xense/src/RoboTwin/data/local-runs/learning-study-20261106-225739/configs/manifest-smoke.json"
+      ],
+      "heartbeat": "/home/xense/src/RoboTwin/data/local-runs/learning-study-20261106-225739/manifests/manifest-smoke/status.json",
+      "result_status": "/home/xense/src/RoboTwin/data/local-runs/learning-study-20261106-225739/manifests/manifest-smoke/status.json",
+      "timeout_seconds": 240,
+      "stall_seconds": 180
+    }
+  ]
+}

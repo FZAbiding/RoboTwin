@@ -3,7 +3,30 @@
 import argparse
 import collections
 import json
+import pickle
 from pathlib import Path
+import numpy as np
+
+
+def numerical_path_difference(left, right):
+    result={'structure_equal':True,'max_position_difference':0.0,'max_velocity_difference':0.0,
+            'compared_position_arrays':0,'compared_velocity_arrays':0,'different_array_shapes':0,
+            'scope':'Pointwise differences only for equal-shaped arrays; unequal durations are recorded separately, without resampling.'}
+    for arm in ('left_joint_path','right_joint_path'):
+        if len(left[arm])!=len(right[arm]):result['structure_equal']=False;continue
+        for a,b in zip(left[arm],right[arm]):
+            if a.get('status')!=b.get('status'):result['structure_equal']=False
+            for key in ('position','velocity'):
+                if key not in a and key not in b:continue
+                if key not in a or key not in b:result['structure_equal']=False;continue
+                x=np.asarray(a[key]);y=np.asarray(b[key])
+                if x.shape!=y.shape:
+                    result['structure_equal']=False;result['different_array_shapes']+=1;continue
+                assert np.isfinite(x).all() and np.isfinite(y).all()
+                result[f'compared_{key}_arrays']+=1
+                delta=float(np.max(np.abs(x-y))) if x.size else 0.0
+                result[f'max_{key}_difference']=max(result[f'max_{key}_difference'],delta)
+    return result
 
 
 def main():
@@ -15,7 +38,11 @@ def main():
     for left,right in [('baseline-1','baseline-2'),('reset-1','reset-2'),('baseline-1','reset-1'),('baseline-2','reset-2')]:
         a=candidates[left];b=candidates[right];eligible_a=set(trials[left]);eligible_b=set(trials[right]);shared=eligible_a&eligible_b
         comparable_paths=set(audits[left]['expert_path_hashes'])&set(audits[right]['expert_path_hashes']);different_paths=[int(seed) for seed in comparable_paths if audits[left]['expert_path_hashes'][seed]!=audits[right]['expert_path_hashes'][seed]]
-        pairs.append({'left':left,'right':right,'eligible_changes':sorted(eligible_a^eligible_b),'shared_eligible_count':len(shared),'learner_success_changes_on_shared':sorted(seed for seed in shared if trials[left][seed]['success']!=trials[right][seed]['success']),'learner_action_count_changes_on_shared':sorted(seed for seed in shared if trials[left][seed]['actions']!=trials[right][seed]['actions']),'path_hashes_compared':len(comparable_paths),'path_hash_changes':sorted(different_paths)})
+        numerical={}
+        for seed in sorted(map(int,comparable_paths)):
+            files=[r/'eval'/name/'expert_paths'/f'seed_{seed}.pkl' for name in (left,right)]
+            numerical[seed]=numerical_path_difference(*[pickle.loads(p.read_bytes()) for p in files])
+        pairs.append({'left':left,'right':right,'eligible_changes':sorted(eligible_a^eligible_b),'shared_eligible_count':len(shared),'learner_success_changes_on_shared':sorted(seed for seed in shared if trials[left][seed]['success']!=trials[right][seed]['success']),'learner_action_count_changes_on_shared':sorted(seed for seed in shared if trials[left][seed]['actions']!=trials[right][seed]['actions']),'path_hashes_compared':len(comparable_paths),'path_hash_changes':sorted(different_paths),'numerical_path_differences':numerical})
     summary={}
     for name,a in audits.items():
         counts=collections.Counter((c.get('model_id'),bool(c.get('admitted_by_native_expert_gate'))) for c in a['candidate_results'])

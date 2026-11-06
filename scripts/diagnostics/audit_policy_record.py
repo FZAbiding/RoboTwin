@@ -59,7 +59,12 @@ def main():
         c = candidates[seed]; assert c['expert_plan_success'] and c['expert_task_success']
         assert final_predicates[seed] == trial['success']
         for arm in ('left','right'): assert top_calls[(seed,arm)] == n
-        path = Path(state['upstream_output'])/f'episode{i}.mp4'
+        if config.get('frozen_expert_manifest'):
+            assert c['admitted_by_frozen_expert_manifest'] and c['planned_joints_legal']
+            assert c['initial_state_max_difference'] <= 1e-8
+            path = Path(state['upstream_output'])/f'seed_{seed}'/'episode0.mp4'
+        else:
+            path = Path(state['upstream_output'])/f'episode{i}.mp4'
         stream = json.loads(subprocess.check_output(['ffprobe','-v','error','-select_streams','v:0',
                    '-show_entries','stream=nb_frames,width,height','-of','json',str(path)],text=True))['streams'][0]
         assert (stream['width'],stream['height']) == (320,240)

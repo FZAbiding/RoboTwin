@@ -23,7 +23,7 @@ def main():
             frozen_start=start.clone();frozen_goal=goal.clone();frozen_config=config.clone();value=original(start,goal,config,*pos,**kw)
             if phase['name']=='original':
                 paths=[]
-                if value.interpolated_plan is not None:
+                if value.interpolated_plan is not None and mode=='batch':
                     if value.path_buffer_last_tstep is not None:
                         paths=[value.interpolated_plan[i].trim_trajectory(0,int(n)).clone() for i,n in enumerate(value.path_buffer_last_tstep)]
                     else:paths=[value.interpolated_plan[i].clone() for i in range(len(value.interpolated_plan))]

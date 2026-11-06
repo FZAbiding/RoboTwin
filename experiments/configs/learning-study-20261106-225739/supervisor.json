@@ -1,0 +1,70 @@
+{
+  "record_dir": "/home/xense/src/RoboTwin/data/local-runs/learning-study-20261106-225739/supervisor",
+  "python_prefix": "/home/xense/miniforge3/envs/robotwin",
+  "cwd": "/home/xense/src/RoboTwin",
+  "gpu": 0,
+  "minimum_free_disk_gib": 4,
+  "previous_gpu_wall_seconds": 3059.7305,
+  "gpu_budget_seconds": 172800,
+  "prior_time_accounting": "Conservative elapsed wall-time upper bound since this authorization phase; includes idle and preparation.",
+  "environment": {
+    "OPENBLAS_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "TMPDIR": "/home/xense/src/RoboTwin/data/local-runs/learning-study-20261106-225739/tmp"
+  },
+  "jobs": [
+    {
+      "name": "freeze-comparison",
+      "arguments": [
+        "scripts/collect_expert_manifest.py",
+        "--config",
+        "/home/xense/src/RoboTwin/data/local-runs/learning-study-20261106-225739/configs/comparison.json"
+      ],
+      "heartbeat": "/home/xense/src/RoboTwin/data/local-runs/learning-study-20261106-225739/manifests/comparison/status.json",
+      "result_status": "/home/xense/src/RoboTwin/data/local-runs/learning-study-20261106-225739/manifests/comparison/status.json",
+      "timeout_seconds": 3600,
+      "stall_seconds": 180
+    },
+    {
+      "name": "freeze-confirmation",
+      "arguments": [
+        "scripts/collect_expert_manifest.py",
+        "--config",
+        "/home/xense/src/RoboTwin/data/local-runs/learning-study-20261106-225739/configs/confirmation.json"
+      ],
+      "heartbeat": "/home/xense/src/RoboTwin/data/local-runs/learning-study-20261106-225739/manifests/confirmation/status.json",
+      "result_status": "/home/xense/src/RoboTwin/data/local-runs/learning-study-20261106-225739/manifests/confirmation/status.json",
+      "timeout_seconds": 3600,
+      "stall_seconds": 180
+    },
+    {
+      "name": "train-seed-0",
+      "arguments": [
+        "scripts/train_act_recorded.py",
+        "--config",
+        "/home/xense/src/RoboTwin/data/local-runs/learning-study-20261106-225739/configs/train-seed-0.json"
+      ],
+      "heartbeat": "/home/xense/src/RoboTwin/data/local-runs/learning-study-20261106-225739/training/seed-0/epochs.jsonl",
+      "result_status": "/home/xense/src/RoboTwin/data/local-runs/learning-study-20261106-225739/training/seed-0/status.json",
+      "timeout_seconds": 15000,
+      "stack_after_seconds": 120,
+      "stall_seconds": 240,
+      "stack_diagnostics": true
+    },
+    {
+      "name": "train-seed-1",
+      "arguments": [
+        "scripts/train_act_recorded.py",
+        "--config",
+        "/home/xense/src/RoboTwin/data/local-runs/learning-study-20261106-225739/configs/train-seed-1.json"
+      ],
+      "heartbeat": "/home/xense/src/RoboTwin/data/local-runs/learning-study-20261106-225739/training/seed-1/epochs.jsonl",
+      "result_status": "/home/xense/src/RoboTwin/data/local-runs/learning-study-20261106-225739/training/seed-1/status.json",
+      "timeout_seconds": 15000,
+      "stack_after_seconds": 120,
+      "stall_seconds": 240,
+      "stack_diagnostics": true
+    }
+  ]
+}
