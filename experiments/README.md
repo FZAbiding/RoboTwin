@@ -1,0 +1,62 @@
+# RoboTwin 本机实验记录
+
+本目录保存受 Git 管理的复现方法、问题与结论索引。原始资产、数据、权重、视频、逐动作日志和有效配置保存在 `data/local-runs/`，不将大文件加入 Git。每轮必须使用全新输出目录，保留失败记录，记录运行版本、配置及产物哈希。
+
+## 当前授权与版本边界
+
+2026-11-06 用户明确授权：本地提交 Git 保存，禁止推送远端和创建 PR；继续规划器一致性验证及后续受控训练实验，可使用最长 48 小时 GPU 时间，需持续汇报。此授权覆盖旧规则中的本地提交限制。用户已要求不再以 HANDOFF.md 作为执行依据。
+
+初始代码：RoboTwin `ea8b21121ebb3cd201ff5b3fe361944ac94eda3f`，XPolicyLab `fa431ecd893ee706883e64fe5fe1464ec8cd928d`。所有后续改动和实验版本另行记录；原始成绩不重标。
+
+## 已完成链路
+
+任务 `lift_pot`，物理机器人 `aloha-agilex`，独立配置完整沿用 `demo_clean` 初态分布和原始成功判据。`arx_x5` 仅提供双臂 `6+1, 6+1` 数据维度映射，不代表验证了 X5 机器人。
+
+- 环境：Mamba `robotwin`，Python 3.10.22，SAPIEN 3.0.0b1，Torch 2.4.1+cu121，NumPy 1.26.4，MPLib 0.2.1，CuRobo v0.7.8。环境内 CUDA 12.1 / GCC12；系统驱动和 CUDA 链接未改。
+- 专家筛选和原生回放：50 条成功示范，5,553 对 state/action。全部为 kitchenpot/base0；原件包含四相机，ACT 使用 head/right_wrist/left_wrist 三路。
+- 转换：共享 RGB 解码器，640×480，无损 LZF、按帧分块，约 4.29 GB；16,659 张派生图像逐帧比对通过，原始与派生文件均有 SHA256。
+- ACT：40/10 回合划分，batch16、chunk50、lr1e-5、KL10、hidden512、FF3200、temporal aggregation；正式训练 1,000 epoch、3,000 次更新。沿用上游全部50回合、末帧补到127的归一化统计；验证集参与了归一化。
+- 权重新进程重载、reset、WebSocket 与直接推理动作一致；真实闭环20回合12成功、8失败，4,259次动作。成绩条件于原生专家筛选：49候选、20入选。并非49个候选的无条件成功率。
+
+正式权重 SHA256：`08429b6e19f482cb166a468c932e81a423db00544d4b7341c76b403b740ffa3c`。
+
+## 产物与报告
+
+- 环境/最小回合：`data/local-runs/stage12-20261104-222636/`
+- 50条专家回放：`data/local-runs/stage3-20261105-001152/`
+- 正式训练和全链路验收：`data/local-runs/fullchain-20261105-005503/checks/fullchain-audit.json`
+- 权重：`data/local-runs/fullchain-20261105-005503/checkpoints/formal-r2/`
+- 20回合逐动作与视频索引：`data/local-runs/fullchain-20261105-005503/eval/formal-eval-r3/`
+- 稳定性与失败诊断：`data/local-runs/diagnosis-20261106-181434/`
+- 总报告：`/home/xense/src/xensim-bench/outputs/research/robotwin-overview-20261104/robotwin.html`，章节 `#execution-progress-20261105`、`#diagnosis-20261106`。源码为相邻 `robotwin.src.html`。
+
+这些绝对路径是本机索引。迁移机器时需另行准备原始数据和权重，并复制有效配置、改为全新输出目录；Git 本身不包含大文件。
+
+## 遇到的问题与处理
+
+1. **CuRobo 扩展编译失败。** 固定同一源码与依赖，以 `NVCC_APPEND_FLAGS=--threads=1` 重新构建通过；未升级系统 CUDA 或替换上游源码。
+2. **采集断点清单被中断覆盖。** 从成功日志、轨迹序号和哈希恢复37条已保存规划路径，保留中断原件；随后完成原生回放验收。监控器误判连续失败的问题单独修正，未放宽任务成功判据。
+3. **ACT 多偏移一帧。** 原始 RoboTwin action[t] 已是 state[t] 对应的下一采样目标，旧读取器又取 action[t-1]。仅为已知 RoboTwin 派生数据写入 `action_alignment`，读取器使用现有对齐分支。真实 k=42 回归及未标记旧数据兼容测试通过。
+4. **磁盘不足风险。** 保留原始 HDF5 和640×480输入，以可选无损LZF压缩派生图像；压缩前后像素严格一致。临时目录和缓存使用任务目录，未清理其他工程。
+5. **官方服务 shell 重复激活 conda 失败。** 编译器激活脚本在严格 shell 模式下遇到未定义变量；使用同一环境的官方 `XPolicyLab/setup_policy_server.py` 入口，按共享 helper 设置 `ACT_ACTION_DIM`，未修改模型服务实现。
+6. **训练/评测原生运行异常。** 首轮正式训练停在714 epoch，监督器超时终止，保留500 epoch权重；在新目录重训1000 epoch完成。一次评测在第二回合第289步 SIGSEGV，另有绘图进程异常；内核同期记录其他Python进程段错误，原因未确认。采用 faulthandler 和数值库单线程后完成20回合；文档绘图与GPU作业隔离。不能把异常终止当正常完成。
+7. **TOPP 观察器重复包装。** 原始58条错误日志含跨回合重复包装；逐动作、逐手臂证明精确重复倍数，派生审计得到10次真实回退。原始日志未改；记录器改为幂等包装，本次复测验证每动作每臂只计一次。
+8. **同权重复测不是完整20种子的确定性重现。** 复测仍12/20，但专家筛选换掉100037、加入100049。共同19个种子的动作数、成功判定、逐动作数值及实际关节位置均相同，最大数值差为0。两轮不得合并为40个独立样本。
+9. **策略失败与资产/规划失败分开。** 同样的8个策略失败中7个全程未同时进入双TCP三厘米范围，1个未同时保持全部条件。base1的23候选中22个规划失败、1个规划完成但物理抓取失败。未改资产、阈值或历史标签。
+10. **批量/单目标规划不一致。** base1/100001同一冻结起点和目标，批量规划成功，单目标连续重复失败；100037在独立进程中原专家任务成功。原生状态包括 FINETUNE_TRAJOPT_FAIL、INVALID_PARTIAL_POSE_COST_METRIC 和 IK_FAIL；这些定位失败阶段，不等于已证明几何根因。
+11. **网页自动版面检查工具故障。** HTML生成及43幅图图注、110个本机链接检查通过；浏览器检查因工具 SVGPoint 类型错误未完成。旧截图不作为新版本的版面证据。
+
+## 复现入口
+
+先确认实际Python路径、GPU占用和空间，使用原环境及缓存；以下配置是已有实验的记录，不应直接覆盖重跑。
+
+```bash
+mamba run -n robotwin python scripts/train_act_recorded.py --config /path/to/new-training.json
+mamba run -n robotwin python scripts/eval_act_recorded.py --config /path/to/new-evaluation.json
+mamba run -n robotwin python scripts/diagnostics/expert_query_probe.py \
+  --run-dir /path/to/new-run --config /path/to/evaluation.json --seed 100001
+```
+
+训练与评测记录器观察上游主循环，不复制模型训练或仿真评测循环。评测可选 `diagnostics_module` 指向 `scripts/diagnostics/lift_pot_observer.py`：记录独立的成功条件、实际接触和原生规划返回；这些真值不会传给ACT。
+
+下一阶段先做规划器状态重置和候选执行一致性的分离对照；只有在原成功判据和真实物理验收下验证有效的改动才采纳。随后以固定数据、固定新评测队列做单因素训练对照。全程保留对照组、失败及有效命令。
