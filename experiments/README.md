@@ -141,3 +141,5 @@ export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
 缓存边界回归针对周期1/2/5/7各20回合，以及提前成功、异常强制清理。测试对真实旧提交394c338得到3个预期的清理节奏失败，修复后3项回归通过。它们使用明确标记的合成生命周期夹具，不作为专家或模型物理成功证据。首次夹具漏建原生main负责创建的视频根目录，在新日志重跑前补齐；原失败日志保留。
 
 尝试规划CPU推理验证时还确认本版本上游`detr/main.py`构建器强制调用`model.cuda()`，仅设置device=cpu不能保证无GPU分配。本轮保持CPU权重审计与完整连续训练，模型服务和真实仿真按既定顺序在GPU上验证，没有为此静默修改子模块。
+
+连续切换权重还暴露了服务预检的TIME_WAIT问题：用官方PolicyServer和真实WebSocket连接关闭后，旧普通bind预检实测EADDRINUSE，而设置与asyncio服务一致的SO_REUSEADDR后可绑定。只修复本任务预检，不设置SO_REUSEPORT或终止别人的服务。真实TCP回归同时证明关闭后的端口可复用、仍在监听的端口必须拒绝；官方传输检查未加载模型，不算推理或物理任务验证。证据在`checks/official-ws-port-lifecycle.json`及`logs/policy-port-regression.log`。

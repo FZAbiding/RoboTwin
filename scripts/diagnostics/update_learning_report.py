@@ -71,6 +71,8 @@ def main():
         evaluation+='<figure><div class="ve-table"><table><thead><tr><th>提前完成的检查</th><th>实际结论</th><th>证据</th></tr></thead><tbody>'+''.join(evidence_rows)+'</tbody></table></div><figcaption>完整清单和中间权重已独立核查；它们不能替代六千轮轨迹完成及真实策略闭环。</figcaption></figure>'
     if (r/'checks/evaluation-contract-review.json').exists():
         evaluation+=f'<p>输入时序复核：save_freq=15是专家路径采样步距，frequency=30是当前ACT不读取的元数据，真实动作由250Hz原生TOPP路径推进。固定队列逐种子调用会重置缓存计数，现按全局回合序号恢复原清理节奏并保留异常强制清理；未改动作、模型输入或任务判据。{link(r/"checks/evaluation-contract-review.json","时序与缓存复核")}。缓存标志回归不是物理策略成绩，真实长队列释放仍由后续逐回合审计确认。</p>'
+    if (r/'checks/official-ws-port-lifecycle.json').exists():
+        evaluation+=f'<p>连续切换权重的服务预检复核：官方WebSocket传输关闭后，普通bind实测返回EADDRINUSE；与官方asyncio服务一致的SO_REUSEADDR可立即绑定，同时回归确认活动监听端口仍被拒绝。这里只修复本任务预检，不设置SO_REUSEPORT、不停止其他服务；此传输检查没有加载模型，不能作为推理成绩。{link(r/"checks/official-ws-port-lifecycle.json","官方传输实测")} · {link(r/"logs/policy-port-regression.log","端口生命周期回归")}</p>'
     if comparison.get('models'):
         rows=[];bars=[]
         for i,v in enumerate(comparison['models']):

@@ -22,6 +22,14 @@ def write_json(path, value):
     temporary.write_text(json.dumps(value, indent=2)); temporary.replace(path)
 
 
+def check_port_available(host: str, port: int) -> None:
+    # Match asyncio's server socket behavior: permit TIME_WAIT reuse while
+    # still rejecting an active listener. No SO_REUSEPORT or process shutdown.
+    with socket.socket() as probe:
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        probe.bind((host, port))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config', type=Path, required=True)
@@ -60,7 +68,9 @@ def main():
         if free < int(config.get('minimum_free_gpu_mib', 16000)):
             raise RuntimeError(f'Only {free} MiB GPU memory free; no unrelated process was stopped')
         if shutil.disk_usage(record).free < 3 * 1024**3: raise RuntimeError('Less than3GiB disk free')
-        with socket.socket() as probe: probe.bind((config['host'], int(config['port'])))
+        check_port_available(config['host'], int(config['port']))
+        state['server_port_preflight'] = {'host': config['host'], 'port': int(config['port']),
+                                          'reuse_address': True}
         checkpoint = Path(config['checkpoint']).resolve()
         state['checkpoint_sha256'] = hashlib.sha256((checkpoint / 'policy_last.ckpt').read_bytes()).hexdigest()
         state['root_commit'] = subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip()
