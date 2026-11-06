@@ -74,3 +74,7 @@ mamba run -n robotwin python scripts/diagnostics/expert_query_probe.py \
 后续条件执行方案预先记录于 `experiments/plans/20261106-policy-improvement.json`：原50条数据、两训练种子、3k/9k/18k优化更新的原生训练轨迹检查点；新专家验证比较清单与最终确认清单分别从300000、400000起，筛选资格预先冻结，避免各策略重新筛选换队列。仅在证据支持时扩充数据，并独立比较。
 
 原生采集现在支持可选 `start_seed`（默认0）和 `max_seed_attempts`（默认不限）。成功、关节合法性和回放判据不变。`seed.txt` 使用同目录临时文件、flush/fsync和原子替换；替换失败会保留旧清单和待恢复临时文件。回归测试覆盖原格式和故障注入，防止重现历史断点损坏。
+
+长训练记录器新增可选 `checkpoint_update_steps`，在真实优化器完成更新后原子保存模型权重、更新数和SHA256；默认配置不新增检查点。它不恢复优化器状态，不能把模型权重加载伪装成精确续训。预注册学习曲线将使用每个种子的一条连续训练轨迹。
+
+可选 `data_loader` 配置使用spawn和持久worker，保留原数据集、采样器、batch、归一化与原生训练循环；整组新预算采用同一协议，并重新得到其1k epoch参考点。它与历史原生worker协议不是位级复现关系。实际2轮训练、更新数、检查点和worker PID验收通过后才启动长训练；后续原生卡住由SIGUSR1栈诊断和监督器如实记录。

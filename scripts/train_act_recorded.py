@@ -33,6 +33,11 @@ def main() -> None:
     parser.add_argument("--config", type=Path, required=True)
     options = parser.parse_args()
     config = json.loads(options.config.read_text(encoding="utf-8"))
+    if config.get("enable_stack_diagnostics", False):
+        import faulthandler
+        import signal
+        faulthandler.enable()
+        faulthandler.register(signal.SIGUSR1, all_threads=True)
     record_dir = Path(config["record_dir"]).resolve()
     checkpoint_dir = Path(config["checkpoint_dir"]).resolve()
     if checkpoint_dir.exists():
@@ -114,15 +119,42 @@ def main() -> None:
     step_start = 0.0
     observations: dict[str, list[dict]] = {"train": [], "validation": []}
     head_before = None
+    policy_reference = None
+    observed_loaders = {}
+    update_checkpoints = {int(value) for value in config.get("checkpoint_update_steps", [])}
+    if any(value < 1 for value in update_checkpoints):
+        raise ValueError("Checkpoint updates must be positive")
 
     def load_data(*positional, **keywords):
         result = original_load(*positional, **keywords)
-        train, validation, stats, _ = result
+        train, validation, stats, is_sim = result
+        loader_options = config.get("data_loader", {})
+        if loader_options:
+            from torch.utils.data import DataLoader
+            context = loader_options.get("multiprocessing_context", "spawn")
+            persistent = bool(loader_options.get("persistent_workers", True))
+            def rebuild(loader):
+                if loader.num_workers < 1:
+                    raise ValueError("Explicit multiprocessing context requires at least one worker")
+                return DataLoader(loader.dataset, batch_size=loader.batch_size,
+                    sampler=loader.sampler, num_workers=loader.num_workers,
+                    collate_fn=loader.collate_fn, pin_memory=loader.pin_memory,
+                    drop_last=loader.drop_last, timeout=loader.timeout,
+                    worker_init_fn=loader.worker_init_fn, generator=loader.generator,
+                    prefetch_factor=loader.prefetch_factor, persistent_workers=persistent,
+                    multiprocessing_context=context)
+            train, validation = rebuild(train), rebuild(validation)
+            result = (train, validation, stats, is_sim)
+        observed_loaders.update(train=train, validation=validation)
+        state["expected_updates"] = len(train) * args["num_epochs"]
+        if any(value > state["expected_updates"] for value in update_checkpoints):
+            raise ValueError("Requested update checkpoint exceeds the native training budget")
         train_ids = [int(i) for i in train.dataset.episode_ids]
         val_ids = [int(i) for i in validation.dataset.episode_ids]
         assert not set(train_ids) & set(val_ids)
         assert set(train_ids) | set(val_ids) == set(by_episode)
         split = {
+            "data_loader_options": config.get("data_loader", {}),
             "dataset_rng_seed_in_upstream_main": 1,
             "training_seed": args["seed"],
             "train_episode_ids": train_ids,
@@ -154,6 +186,10 @@ def main() -> None:
                     for name in items[0]
                 }
         row["updates_completed"] = state["updates"]
+        row["loader_worker_pids"] = {
+            label: [worker.pid for worker in getattr(getattr(loader, "_iterator", None), "_workers", [])]
+            for label, loader in observed_loaders.items()
+        }
         state["epochs"].append(row)
         with (record_dir / "epochs.jsonl").open("a") as file:
             file.write(json.dumps(row) + "\n")
@@ -178,8 +214,9 @@ def main() -> None:
         return output
 
     def make_policy(*positional, **keywords):
-        nonlocal head_before
+        nonlocal head_before, policy_reference
         policy = original_policy(*positional, **keywords)
+        policy_reference = policy
         head_before = policy.state_dict()["model.action_head.weight"].detach().cpu().clone()
         state["parameters"] = sum(parameter.numel() for parameter in policy.parameters())
         return policy
@@ -203,6 +240,20 @@ def main() -> None:
                 if not finite or not bool(torch.stack(finite).all().item()):
                     raise FloatingPointError("Missing or nonfinite first-step gradients")
                 state["first_step_gradients_finite"] = True
+            if state["updates"] in update_checkpoints:
+                assert policy_reference is not None
+                checkpoint_dir.mkdir(parents=True, exist_ok=True)
+                destination = checkpoint_dir / f"policy_update_{state['updates']}_seed_{args['seed']}.ckpt"
+                if destination.exists():
+                    raise FileExistsError(destination)
+                temporary = destination.with_suffix(destination.suffix + ".partial")
+                torch.save(policy_reference.state_dict(), temporary)
+                temporary.replace(destination)
+                entry = {"updates": state["updates"], "epoch_index": epoch,
+                         "path": str(destination), "bytes": destination.stat().st_size,
+                         "sha256": hashlib.sha256(destination.read_bytes()).hexdigest()}
+                state.setdefault("update_checkpoints", []).append(entry)
+                write_json(record_dir / "status.json", state)
 
         optimizer.register_step_post_hook(after_step)
         return optimizer
@@ -233,6 +284,8 @@ def main() -> None:
             checkpoint_tensors_finite=True,
         )
         assert len(state["epochs"]) == args["num_epochs"]
+        assert state["updates"] == state["expected_updates"]
+        assert {v["updates"] for v in state.get("update_checkpoints", [])} == update_checkpoints
     except BaseException:
         state.update(status="failed", error=traceback.format_exc(), elapsed_seconds=time.perf_counter() - start)
         raise

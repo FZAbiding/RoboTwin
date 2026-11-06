@@ -11,6 +11,9 @@ def main():
     def link(path,label):return f'<a href="{esc(os.path.relpath(path,report))}">{esc(label)}</a>' if path.exists() else '待产物'
     backup=r/'snapshots/report-before-controls.src.html'
     if not backup.exists():shutil.copy2(src,backup)
+    supervisor=read(r/'supervisors/controls/status.json');phase=read(r/'status.json')
+    phase.update(status=supervisor.get('status','preparing'),active_jobs=[{'name':v['name'],'pid':v['pid']} for v in supervisor.get('jobs',[]) if 'exit_code' not in v],server_pid=supervisor.get('server_pid') if supervisor.get('status')=='running' else None,updated=datetime.datetime.now().isoformat(timespec='seconds'))
+    (r/'status.json').write_text(json.dumps(phase,indent=2))
     comparison=read(r/'checks/control-comparison.json');rows=[];nodes=[];names=['baseline-1','reset-1','baseline-2','reset-2']
     for i,name in enumerate(names):
         v=read(r/'eval'/name/'status.json');audit=read(r/'checks'/f'{name}-audit.json');reset=read(r/'configs'/f'{name}.json').get('diagnostic_options',{}).get('reset_planners');status='已交叉验收' if audit.get('passed') else v.get('status','待运行');trials=v.get('trials',[]);success=sum(bool(t['success']) for t in trials)
