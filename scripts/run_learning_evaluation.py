@@ -13,6 +13,7 @@ import math
 import os
 from pathlib import Path
 import signal
+import shutil
 import subprocess
 import sys
 import time
@@ -28,15 +29,20 @@ def write_json(path,value):
 
 def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--run-dir',type=Path,required=True)
-    r=p.parse_args().run_dir.resolve();record=r/'evaluation-pipeline';record.mkdir(exist_ok=False)
+    p.add_argument('--completed-seed-first',action='store_true')
+    options=p.parse_args();r=options.run_dir.resolve();record=r/'evaluation-pipeline';record.mkdir(exist_ok=False)
     os.chdir(ROOT)
+    sys.path.insert(0,str(ROOT))
+    from scripts.training_record import read_training_status
     cfg=json.loads((r/'configs/supervisor.json').read_text())
+    child_environment=os.environ.copy();child_environment.update(cfg.get('environment',{}))
     if Path(sys.prefix)!=Path(cfg['python_prefix']):raise RuntimeError(sys.executable)
     state={'status':'waiting_for_training','pid':os.getpid(),'jobs':[],
            'started':datetime.datetime.now().isoformat(timespec='seconds')}
     source=(ROOT/'scripts/run_learning_evaluation.py').read_bytes()
     state['entry_sha256']=hashlib.sha256(source).hexdigest()
-    process=None;used=0.0;last_report=0.0
+    process=None;monitor=None;used=float(cfg.get('previous_gpu_wall_seconds',0)) if options.completed_seed_first else 0.0;last_report=0.0
+    state['execution_order']='completed seed0 comparison, fresh seed1 training, seed1 comparison, confirmation' if options.completed_seed_first else 'both training trajectories, all comparisons, confirmation'
     report_src=Path('/home/xense/src/xensim-bench/outputs/research/robotwin-overview-20261104/robotwin.src.html')
     report_cmd=[sys.executable,'scripts/diagnostics/update_learning_report.py','--run-dir',str(r),
                 '--report-source',str(report_src),'--renderer','/home/xense/.agents/skills/visual-explainer/kit/render.mjs',
@@ -51,33 +57,69 @@ def main():
                     state['last_report_exit_code']=result.returncode
                 except subprocess.TimeoutExpired:state['last_report_exit_code']='timeout'
             last_report=time.monotonic();save()
-    def stop():
-        if process is None or process.poll() is not None:return
-        try:os.killpg(process.pid,signal.SIGTERM)
+    def stop(target=None,include_orphans=False):
+        target=process if target is None else target
+        if target is None:return
+        if target.poll() is not None and not include_orphans:return
+        try:os.killpg(target.pid,signal.SIGTERM)
         except ProcessLookupError:return
-        try:process.wait(timeout=40)
+        try:target.wait(timeout=40)
         except subprocess.TimeoutExpired:
-            try:os.killpg(process.pid,signal.SIGKILL)
+            try:os.killpg(target.pid,signal.SIGKILL)
             except ProcessLookupError:pass
-            process.wait()
+            target.wait()
     def terminate(*_):raise KeyboardInterrupt('Study shutdown requested')
     signal.signal(signal.SIGTERM,terminate)
 
+    def authorization_elapsed():
+        started=cfg.get('authorization_started_at_epoch')
+        return max(0,time.time()-float(started)) if started else 0.0
+
+    def wait_resources(name):
+        nonlocal used
+        phase=state['status'];last_print=0
+        while True:
+            used=max(used,authorization_elapsed())
+            if used>=cfg['gpu_budget_seconds']:raise TimeoutError('Authorized GPU/time window exhausted while waiting')
+            free=int(subprocess.check_output(['nvidia-smi','--id='+str(cfg.get('gpu',0)),
+                '--query-gpu=memory.free','--format=csv,noheader,nounits'],text=True).strip())
+            disk=shutil.disk_usage(r).free
+            minimum_disk=(4 if name.startswith('train-') else 3)*1024**3
+            if free>=16000 and disk>=minimum_disk:
+                state['status']=phase;state.pop('waiting_for_resources',None);save();return
+            state.update(status='waiting_for_resources',waiting_for_resources={
+                'job':name,'gpu_free_mib':free,'minimum_gpu_free_mib':16000,
+                'disk_free_bytes':disk,'minimum_disk_free_bytes':minimum_disk})
+            state['gpu_wall_seconds_including_prior_stages']=used;save();report()
+            if time.monotonic()-last_print>60:
+                print(json.dumps(state['waiting_for_resources']),flush=True);last_print=time.monotonic()
+            time.sleep(10)
+
     def run(name,arguments,timeout,charge=False):
-        nonlocal process,used
+        nonlocal process,used,monitor
+        if charge:wait_resources(name)
         if charge and used>=cfg['gpu_budget_seconds']:raise TimeoutError('Authorized GPU budget exhausted')
         command=[sys.executable,'-X','faulthandler','-u',*arguments]
         with (record/(name+'.log')).open('xb') as log:
-            process=subprocess.Popen(command,stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
+            process=subprocess.Popen(command,stdout=log,stderr=subprocess.STDOUT,start_new_session=True,env=child_environment)
             job={'name':name,'command':command,'pid':process.pid,'started':datetime.datetime.now().isoformat(timespec='seconds')}
             state['jobs'].append(job);save();started=time.monotonic()
             while process.poll() is None:
                 elapsed=time.monotonic()-started
                 if elapsed>timeout or (charge and used+elapsed>=cfg['gpu_budget_seconds']):
                     raise TimeoutError(name+' exceeded wall-time budget')
+                if charge and authorization_elapsed()>=cfg['gpu_budget_seconds']:
+                    raise TimeoutError('Authorized time window exhausted')
+                if charge and shutil.disk_usage(r).free<1.5*1024**3:
+                    raise RuntimeError('Disk free space below1.5GiB')
+                if name=='train-seed-1' and monitor is None and (r/'supervisor/status.json').exists():
+                    with (record/'worker-monitor.log').open('xb') as monitor_log:
+                        monitor=subprocess.Popen([sys.executable,'-u','scripts/diagnostics/monitor_act_workers.py',
+                            '--run-dir',str(r)],stdout=monitor_log,stderr=subprocess.STDOUT,start_new_session=True,env=child_environment)
+                    state['worker_monitor_pid']=monitor.pid;save()
                 report();time.sleep(2)
             job.update(exit_code=process.returncode,seconds=time.monotonic()-started)
-            if charge:used+=job['seconds']
+            if charge:used=max(used+job['seconds'],authorization_elapsed())
             state['gpu_wall_seconds_including_prior_stages']=used;save()
             if process.returncode:raise RuntimeError(f'{name} exited {process.returncode}')
             process=None
@@ -86,7 +128,7 @@ def main():
         name=f'{cohort}-s{seed}-u{updates}';audit=r/'checks'/f'{name}-audit.json'
         # A new supervisor and official server per checkpoint keeps deployment
         # independent; every policy sees all seeds from the same frozen proof.
-        training=json.loads((r/'training'/f'seed-{seed}'/'status.json').read_text())
+        training=read_training_status(r/'training'/f'seed-{seed}'/'status.json')
         weights=Path(training['checkpoint']) if updates==18000 else next(Path(v['path']) for v in training['update_checkpoints'] if v['updates']==updates)
         deploy=r/'deploy'/f's{seed}-u{updates}'
         if not deploy.exists():
@@ -118,24 +160,48 @@ def main():
 
     save()
     try:
-        while True:
+        comparison=[]
+        if options.completed_seed_first:
+            state['status']='validating_completed_seed0';save();report(force=True)
+            run('seed0-training-audit',['scripts/diagnostics/validate_study_training.py','--run-dir',str(r),
+                                      '--training-seed','0'],600)
+            run('manifests-audit',['scripts/diagnostics/audit_study_manifests.py','--run-dir',str(r)],300)
+            state['status']='validating_compact_record_smoke';save()
+            run('compact-record-smoke',['scripts/train_act_recorded.py','--config',str(r/'configs/compact-smoke.json')],300,charge=True)
+            smoke=read_training_status(r/'training/compact-smoke/status.json')
+            assert smoke['status']=='complete' and smoke['updates']==6 and len(smoke['epochs'])==2
+            state['status']='comparing_completed_seed0';save()
+            for updates in [3000,9000,18000]:
+                comparison.append(evaluate('comparison',0,updates))
+                write_json(r/'checks/comparison-results.json',{'status':'running','models':comparison})
+                report(force=True)
+            state['status']='training_fresh_seed1';save()
+            training_config=json.loads((r/'configs/supervisor.json').read_text())
+            training_config['previous_gpu_wall_seconds']=max(used,authorization_elapsed())
+            live_config=r/'configs/supervisor-effective.json';write_json(live_config,training_config)
+            run('train-seed-1',['scripts/run_research_jobs.py','--config',str(live_config)],15300,charge=True)
             training_state=json.loads((r/'supervisor/status.json').read_text())
-            state['training_supervisor_status']=training_state['status'];save();report()
-            if training_state['status']=='failed':raise RuntimeError('Native collection/training supervisor failed; inspect its preserved logs')
-            if training_state['status']=='complete':break
-            if training_state['gpu_wall_seconds_including_prior_stages']>=cfg['gpu_budget_seconds']:
-                raise TimeoutError('Authorized GPU budget exhausted during training')
-            time.sleep(10)
-        used=training_state['gpu_wall_seconds_including_prior_stages']
+            assert training_state['status']=='complete'
+            used=max(used,training_state['gpu_wall_seconds_including_prior_stages'])
+        else:
+            while True:
+                training_state=json.loads((r/'supervisor/status.json').read_text())
+                state['training_supervisor_status']=training_state['status'];save();report()
+                if training_state['status']=='failed':raise RuntimeError('Native collection/training supervisor failed; inspect its preserved logs')
+                if training_state['status']=='complete':break
+                if training_state['gpu_wall_seconds_including_prior_stages']>=cfg['gpu_budget_seconds']:
+                    raise TimeoutError('Authorized GPU budget exhausted during training')
+                time.sleep(10)
+            used=training_state['gpu_wall_seconds_including_prior_stages']
         state['status']='validating_training';save()
         run('training-audit',['scripts/diagnostics/validate_study_training.py','--run-dir',str(r)],600)
         # Both cohorts were frozen before learner evaluation or model selection.
         manifests=[json.loads((r/'manifests'/name/'manifest.json').read_text()) for name in ['comparison','confirmation']]
         assert all(v['status']=='frozen' and len(v['accepted'])==100 for v in manifests)
         assert not {v['seed'] for v in manifests[0]['accepted']}&{v['seed'] for v in manifests[1]['accepted']}
-        state['status']='comparing_checkpoints';save();comparison=[]
+        state['status']='comparing_checkpoints';save()
         for updates in [3000,9000,18000]:
-            for seed in [0,1]:
+            for seed in ([1] if options.completed_seed_first else [0,1]):
                 comparison.append(evaluate('comparison',seed,updates))
                 write_json(r/'checks/comparison-results.json',{'status':'running','models':comparison})
                 report(force=True)
@@ -160,7 +226,13 @@ def main():
     except BaseException:
         state.update(status='failed',error=traceback.format_exc());raise
     finally:
-        stop();state['updated']=datetime.datetime.now().isoformat(timespec='seconds');save();report(force=True)
+        stop(include_orphans=True)
+        if monitor is not None:stop(monitor)
+        if state['status']=='failed' and (r/'checks/comparison-results.json').exists():
+            partial=json.loads((r/'checks/comparison-results.json').read_text())
+            if partial['status']=='running':
+                partial.update(status='incomplete',reason=state['error']);write_json(r/'checks/comparison-results.json',partial)
+        state['updated']=datetime.datetime.now().isoformat(timespec='seconds');save();report(force=True)
 
 
 if __name__=='__main__':main()

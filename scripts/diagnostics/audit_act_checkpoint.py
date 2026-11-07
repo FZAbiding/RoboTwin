@@ -5,16 +5,22 @@ import hashlib
 import json
 from pathlib import Path
 import pickle
+import sys
 import numpy as np
 import torch
+sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
+from scripts.training_record import read_training_status
 
 
 def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--config',type=Path,required=True)
     p.add_argument('--updates',type=int,required=True);p.add_argument('--output',type=Path,required=True)
     p.add_argument('--reference-dir',type=Path);a=p.parse_args();cfg=json.loads(a.config.read_text())
-    state=json.loads((Path(cfg['record_dir'])/'status.json').read_text())
-    entry=next(v for v in state['update_checkpoints'] if v['updates']==a.updates)
+    state=read_training_status(Path(cfg['record_dir'])/'status.json')
+    if state['status']=='complete' and a.updates==state['updates']:
+        entry={'path':state['checkpoint'],'sha256':state['checkpoint_sha256'],
+               'epoch_index':len(state['epochs'])-1}
+    else:entry=next(v for v in state['update_checkpoints'] if v['updates']==a.updates)
     path=Path(entry['path']);sha=hashlib.sha256(path.read_bytes()).hexdigest();assert sha==entry['sha256']
     weights=torch.load(path,map_location='cpu',weights_only=True)
     assert weights and all(torch.isfinite(v).all() for v in weights.values())

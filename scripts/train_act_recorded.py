@@ -70,6 +70,7 @@ def main() -> None:
     if args["num_epochs"] < 1 or args["batch_size"] < 1:
         raise ValueError("Positive num_epochs and batch_size are required")
     sys.path.insert(0, str(ROOT))
+    from scripts.training_record import COMPACT_FORMAT, compact_training_status
     from XPolicyLab.utils.process_data import get_action_dim
 
     action_dim = get_action_dim(config["env_cfg_type"])
@@ -109,6 +110,12 @@ def main() -> None:
         "cuda": torch.version.cuda,
         "gpu": torch.cuda.get_device_name(),
     }
+    record_format=config.get('record_format','embedded-epochs-v1')
+    if record_format not in ('embedded-epochs-v1',COMPACT_FORMAT):
+        raise ValueError('Unknown training record format')
+    def save_status():
+        payload=compact_training_status(state) if record_format==COMPACT_FORMAT else state
+        write_json(record_dir/'status.json',payload)
     original_load = training.load_data
     original_forward = training.forward_pass
     original_policy = training.make_policy
@@ -203,7 +210,7 @@ def main() -> None:
         with (record_dir / "epochs.jsonl").open("a") as file:
             file.write(json.dumps(row) + "\n")
         print("[recorded ACT]", json.dumps(row), flush=True)
-        write_json(record_dir / "status.json", state)
+        save_status()
 
     def forward_pass(data, policy):
         nonlocal epoch, previous_mode, epoch_start, observations, step_start
@@ -262,7 +269,7 @@ def main() -> None:
                          "path": str(destination), "bytes": destination.stat().st_size,
                          "sha256": hashlib.sha256(destination.read_bytes()).hexdigest()}
                 state.setdefault("update_checkpoints", []).append(entry)
-                write_json(record_dir / "status.json", state)
+                save_status()
 
         optimizer.register_step_post_hook(after_step)
         return optimizer
@@ -273,7 +280,7 @@ def main() -> None:
     training.make_optimizer = make_optimizer
     start = time.perf_counter()
     torch.cuda.reset_peak_memory_stats()
-    write_json(record_dir / "status.json", state)
+    save_status()
     try:
         training.main(args)
         finish_epoch()
@@ -299,7 +306,7 @@ def main() -> None:
         state.update(status="failed", error=traceback.format_exc(), elapsed_seconds=time.perf_counter() - start)
         raise
     finally:
-        write_json(record_dir / "status.json", state)
+        save_status()
 
 
 if __name__ == "__main__":

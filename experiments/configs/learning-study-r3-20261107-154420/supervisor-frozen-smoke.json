@@ -1,0 +1,29 @@
+{
+  "run_dir": "/home/xense/src/RoboTwin/data/local-runs/learning-study-20261106-225739/supervisors/frozen-smoke",
+  "checkpoint": "/home/xense/src/RoboTwin/data/local-runs/fullchain-20261105-005503/checkpoints/formal-r2",
+  "python_prefix": "/home/xense/miniforge3/envs/robotwin",
+  "gpu": 0,
+  "minimum_free_gpu_mib": 16000,
+  "port": 19141,
+  "host": "127.0.0.1",
+  "policy_config": "/home/xense/src/RoboTwin/XPolicyLab/policy/ACT/deploy.yml",
+  "env_cfg_type": "arx_x5",
+  "experiments": [
+    {
+      "name": "frozen-smoke-1",
+      "config": "/home/xense/src/RoboTwin/data/local-runs/learning-study-20261106-225739/configs/frozen-smoke-1.json",
+      "timeout_seconds": 400
+    },
+    {
+      "name": "frozen-smoke-2",
+      "config": "/home/xense/src/RoboTwin/data/local-runs/learning-study-20261106-225739/configs/frozen-smoke-2.json",
+      "timeout_seconds": 400
+    }
+  ],
+  "thread_limits": {
+    "OPENBLAS_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1"
+  },
+  "gpu_budget_seconds": 172800
+}

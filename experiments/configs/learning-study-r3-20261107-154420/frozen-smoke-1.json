@@ -1,0 +1,26 @@
+{
+  "record_dir": "/home/xense/src/RoboTwin/data/local-runs/learning-study-20261106-225739/eval/frozen-smoke-1",
+  "source_manifest": "/home/xense/src/RoboTwin/data/local-runs/fullchain-20261105-005503/snapshots/stage3-manifest.json",
+  "max_candidate_seeds": 2,
+  "native_args": {
+    "bench_name": "RoboTwin",
+    "task_name": "lift_pot",
+    "env_cfg_type": "arx_x5",
+    "policy_name": "ACT",
+    "host": "127.0.0.1",
+    "port": 19141,
+    "protocol": "ws",
+    "eval_batch": false,
+    "root_dir": "/home/xense/src/RoboTwin",
+    "device_id": "0",
+    "seed": 0,
+    "task_config": "local_lift_pot_manifest_smoke_20261106_225739_eval",
+    "test_num": 2,
+    "expert_check": false,
+    "action_type": "joint",
+    "ckpt_setting": "frozen-smoke-frozen-smoke-1"
+  },
+  "record_execution_detail": true,
+  "diagnostics_module": "/home/xense/src/RoboTwin/scripts/diagnostics/lift_pot_observer.py",
+  "frozen_expert_manifest": "/home/xense/src/RoboTwin/data/local-runs/learning-study-20261106-225739/manifests/manifest-smoke/manifest.json"
+}

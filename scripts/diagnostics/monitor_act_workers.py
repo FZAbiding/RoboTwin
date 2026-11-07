@@ -4,8 +4,11 @@ import argparse
 import datetime
 import json
 import os
+import sys
 from pathlib import Path
 import time
+sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
+from scripts.training_record import read_training_status
 
 
 def main():
@@ -32,14 +35,14 @@ def main():
             if 'exit_code' in job:continue
             name=job['name'];training=r/'training'/name.removeprefix('train-')/'status.json'
             if not training.exists():continue
-            state=read(training)
+            state=read_training_status(training)
             try:rows.append({'role':name,**sample(job['pid'])})
-            except FileNotFoundError:continue
+            except (FileNotFoundError,ProcessLookupError,PermissionError):continue
             if state['epochs']:
                 for role,pids in state['epochs'][-1]['loader_worker_pids'].items():
                     for pid in pids:
                         try:rows.append({'role':name+':'+role,**sample(pid,job['pid'])})
-                        except FileNotFoundError:pass
+                        except (FileNotFoundError,ProcessLookupError,PermissionError):pass
         now=datetime.datetime.now().isoformat(timespec='seconds')
         with output.open('a') as f:f.write(json.dumps({'time':now,'supervisor_status':supervisor['status'],'processes':rows})+'\n')
         count+=1;status_path.write_text(json.dumps({'status':'running' if supervisor['status']=='running' else 'complete',

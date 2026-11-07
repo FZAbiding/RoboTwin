@@ -143,3 +143,26 @@ export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
 尝试规划CPU推理验证时还确认本版本上游`detr/main.py`构建器强制调用`model.cuda()`，仅设置device=cpu不能保证无GPU分配。本轮保持CPU权重审计与完整连续训练，模型服务和真实仿真按既定顺序在GPU上验证，没有为此静默修改子模块。
 
 连续切换权重还暴露了服务预检的TIME_WAIT问题：用官方PolicyServer和真实WebSocket连接关闭后，旧普通bind预检实测EADDRINUSE，而设置与asyncio服务一致的SO_REUSEADDR后可绑定。只修复本任务预检，不设置SO_REUSEPORT或终止别人的服务。真实TCP回归同时证明关闭后的端口可复用、仍在监听的端口必须拒绝；官方传输检查未加载模型，不算推理或物理任务验证。证据在`checks/official-ws-port-lifecycle.json`及`logs/policy-port-regression.log`。
+
+## 2026-11-07 下午：先评测完整轨迹，再补齐第二种子
+
+R2种子0最终以退出码0完成6000轮/18000更新，保留3k、9k、18k三个预算点。最终权重SHA256为`6c7c6c51a02f1af9f8d2d309a276a53c22fa424cbdf0fd6a10385cb13685efa2`，三个权重重载有限、完整历史与worker PID检查通过，原始和派生各50个HDF5哈希未变。
+
+R2种子1主进程以-11退出，faulthandler现场位于json.encoder写累计status，两个worker故障文件均为空。状态文件停在4201轮/12603更新，已关闭刷出的epochs.jsonl实际含4202轮/12606更新；这是记录刷新差异，不把状态文件的running视为进程仍活着。原始状态、追加历史、主进程栈、部分3k/9k权重全部保留，后者不混入新种子1轨迹的模型选择。
+
+另有独立监测问题：R2监测器在种子0退出时读取其worker的/proc/fd遇到PermissionError而退出，没有覆盖种子1。现对进程退出期间的FileNotFound/ProcessLookup/PermissionError做显式容错；没有提升系统权限或访问其他作业。
+
+新目录`data/local-runs/learning-study-r3-20261107-154420/`复用种子0完整训练目录和原100+100冻结专家证明。执行顺序预先调整为：CPU验收 → GPU新日志短训练 → 种子0三预算点真实比较 → 种子1从头连续6k训练 → 两轨迹整体验收 → 新种子1三预算点比较 → 原预登记两种子均值选择及独立确认。没有因看见模型成绩而调整顺序，模型/数据/优化预算/筛选/确认规则不变；不是从仅有权重的9k点精确续训。
+
+记录格式新增显式`record_format=epochs-jsonl-v1`：完整epoch行仍追加到epochs.jsonl，每轮状态只保存元数据、最近epoch和已发布数量。默认旧内嵌格式不变，统一读取器兼容两种。它移除每轮重复序列化全部历史的增长负担，未改原生采样/损失/优化器，不宣称解决段错误。重构出错时的持久化JSON后，独立Python3.10进程未导入Torch，128次序列化未复现；这不能排除原进程的原生堆或硬件问题。四项格式回归覆盖新旧等价读取、尾行中断、完成历史缺失及完成后残缺尾行拒绝。
+
+当前GPU另有不在本任务PID记录中的Python作业占用约18GiB。本阶段先完成CPU工作，GPU作业要求至少16000MiB空闲，训练至少4GiB/评测至少3GiB磁盘；等待时每分钟刷新报告，满足条件自动继续。沿用本任务保守48小时窗口，不终止其他作业。新调度入口：
+
+```bash
+source data/local-runs/fullchain-20261105-005503/env.sh
+export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
+/home/xense/miniforge3/envs/robotwin/bin/python -u scripts/run_learning_evaluation.py \
+  --run-dir /path/to/new-study --completed-seed-first
+```
+
+GPU短训练与后续真实模型成绩仍以运行产物为准；通过CPU记录回归不等于通过GPU训练或仿真。完整验收脚本可用`--training-seed 0`只验收一个已完成轨迹，并明确不声称已完成两种子比较。

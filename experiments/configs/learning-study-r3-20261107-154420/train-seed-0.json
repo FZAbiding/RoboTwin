@@ -1,0 +1,31 @@
+{
+  "benchmark": "RoboTwin",
+  "ckpt_name": "lift_pot_local50_20261105_001152",
+  "ckpt_setting": "RoboTwin-lift_pot_local50_20261105_001152-arx_x5-joint",
+  "checkpoint_dir": "/home/xense/src/RoboTwin/data/local-runs/learning-study-r2-20261107-011547/checkpoints/seed-0",
+  "record_dir": "/home/xense/src/RoboTwin/data/local-runs/learning-study-r2-20261107-011547/training/seed-0",
+  "source_manifest": "/home/xense/src/RoboTwin/data/local-runs/fullchain-20261105-005503/snapshots/stage3-manifest.json",
+  "python_prefix": "/home/xense/miniforge3/envs/robotwin",
+  "num_epochs": 6000,
+  "save_freq": 6000,
+  "batch_size": 16,
+  "seed": 0,
+  "lr": 1e-05,
+  "kl_weight": 10,
+  "chunk_size": 50,
+  "hidden_dim": 512,
+  "dim_feedforward": 3200,
+  "temporal_agg": true,
+  "action_dim": 14,
+  "env_cfg_type": "arx_x5",
+  "checkpoint_update_steps": [
+    3000,
+    9000
+  ],
+  "data_loader": {
+    "multiprocessing_context": "spawn",
+    "persistent_workers": true,
+    "worker_diagnostics": true
+  },
+  "enable_stack_diagnostics": true
+}

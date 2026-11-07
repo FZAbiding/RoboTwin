@@ -9,6 +9,9 @@ import os
 import re
 import shutil
 import subprocess
+import sys
+sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
+from scripts.training_record import read_training_status
 
 
 def main():
@@ -26,12 +29,17 @@ def main():
         v=read(r/'manifests'/name/'status.json')
         coverage='；'.join(f'base{i}={sum(row["model_id"]==i for row in v.get("accepted",[]))}' for i in [0,1])
         manifest_rows.append(f'<tr><td>{esc(name)}</td><td>{esc(v.get("status","待运行"))}</td><td>{len(v.get("candidates",[]))}</td><td>{len(v.get("accepted",[]))}；{coverage}</td><td>{link(r/"manifests"/name/"manifest.json","冻结证明")} · {link(r/"configs"/f"{name}.json","配置")}</td></tr>')
-    training_rows=[]
+    supervisor=read(r/'supervisor/status.json');training_rows=[]
     for seed in [0,1]:
-        v=read(r/'training'/f'seed-{seed}'/'status.json');epochs=v.get('epochs',[])
+        path=r/'training'/f'seed-{seed}'/'status.json'
+        v=read_training_status(path) if path.exists() else {};epochs=v.get('epochs',[])
         loss=epochs[-1].get('validation',{}).get('loss') if epochs else None
-        training_rows.append(f'<tr><td>{seed}</td><td>{esc(v.get("status","待运行"))}</td><td>{len(epochs)}/6000轮；{v.get("updates",0)}/18000更新</td><td>{esc(round(loss,6) if loss is not None else "—")}</td><td>{link(r/"training"/f"seed-{seed}"/"status.json","训练证据")} · {link(r/"configs"/f"train-seed-{seed}.json","配置")}</td></tr>')
-    supervisor=read(r/'supervisor/status.json');checks=read(r/'checks/prerequisites.json')
+        display_status=v.get('status','待运行')
+        for job in supervisor.get('jobs',[]):
+            if job.get('name')==f'train-seed-{seed}' and job.get('exit_code') not in (None,0):
+                display_status=f'异常退出{job["exit_code"]}；原状态可能未刷新'
+        training_rows.append(f'<tr><td>{seed}</td><td>{esc(display_status)}</td><td>{len(epochs)}/6000轮；{v.get("updates",0)}/18000更新</td><td>{esc(round(loss,6) if loss is not None else "—")}</td><td>{link(r/"training"/f"seed-{seed}"/"status.json","训练证据")} · {link(r/"configs"/f"train-seed-{seed}.json","配置")}</td></tr>')
+    checks=read(r/'checks/prerequisites.json')
     pipeline=read(r/'evaluation-pipeline/status.json')
     resources={'time':datetime.datetime.now().isoformat(timespec='seconds'),
                'home_disk_free_bytes':shutil.disk_usage(r).free}
@@ -58,21 +66,34 @@ def main():
         evaluation+=f'<p>长训练首尝试因worker SIGSEGV在445个完整epoch、1336次更新处失败；监督器与模型比较按设计停止，未生成新策略成绩。新诊断记录worker原生故障栈及最后样本，注入故障和随机样本不变两项回归通过；原50+派生50个HDF5哈希不变。GPU外原生读取压力验证：{esc(stress.get("status","待运行"))}，{stress.get("epochs",0)}轮/{stress.get("samples",0)}样本。{link(diagnostic/"checks/data-hash-audit.json","数据哈希")} · {link(diagnostic/"logs/diagnostics-regression.log","故障记录回归")} · {link(diagnostic/"native-reader-2/status.json","原生读取压力状态")}</p>'
         evaluation+='<p>诊断首个压力进程还暴露了独立的AF_UNIX路径过长错误；保留失败日志，改用/home下较短专用TMPDIR，并在长作业前实际建立本地socket验证。此问题不能直接解释先前SIGSEGV，根因仍待现场栈证据。</p>'
     if prior:
-        evaluation+=f'<p>当前为全新重试目录；复用已冻结的比较/确认清单，没有重新抽选种子。两训练种子从头初始化，没有把权重加载称为优化器精确续训；模型、数据、训练更新预算及选择规则保持。仅新增worker故障观察与IPC检查。{link(Path(prior["failed_training"]),"原训练失败记录")} · {link(r/"snapshots/prior-study.json","重试差异记录")}</p>'
+        if (r/'snapshots/schedule-amendment.json').exists():
+            evaluation+=f'<p>本阶段复用种子0已完整完成的6000轮连续轨迹，先评测它的三个预算点；种子1在新目录从头补齐，再按原两种子均值选择预算并独立确认。旧种子1部分权重保留但不混入新轨迹。模型、数据、预算和选择规则保持；仅调整调度与诊断记录形式。{link(r/"snapshots/schedule-amendment.json","结果出现前的调度调整")}</p>'
+        else:
+            evaluation+=f'<p>当前为全新重试目录；复用已冻结的比较/确认清单，没有重新抽选种子。两训练种子从头初始化，没有把权重加载称为优化器精确续训；模型、数据、训练更新预算及选择规则保持。仅新增worker故障观察与IPC检查。{link(Path(prior["failed_training"]),"原训练失败记录")} · {link(r/"snapshots/prior-study.json","重试差异记录")}</p>'
         evaluation+=f'<p>新增诊断的真实短训练与关闭诊断的对照都完成6次更新，初始验证loss相同，更新后权重最大差约4.72e−5，不能声称位级一致。{link(r/"checks/diagnostic-smoke-audit.json","短训练验收")} · {link(r/"checks/smoke-numerical-comparison.json","观察器数值对照")} · {link(r/"checks/worker-resources.jsonl","worker CPU/内存/FD现场")}。资源采样只读取本任务父子进程，不修改CPU亲和性或全局配置。</p>'
     manifests_audit=read(r/'checks/manifests-audit.json')
     checkpoint_audit=read(r/'checks/checkpoint-s0-u3000-audit.json')
+    completed_seed0=read(r/'checks/training-seed-0-audit.json')
     if manifests_audit or checkpoint_audit:
         evidence_rows=[]
         if manifests_audit:
             evidence_rows.append(f'<tr><td>完整专家清单</td><td>200个种子与训练集及另一队列互不重叠；2400个轨迹数组均有限，评测配置和冻结证明一致</td><td>{link(r/"checks/manifests-audit.json","全清单验收")}</td></tr>')
         if checkpoint_audit:
-            evidence_rows.append(f'<tr><td>种子0 · 3000更新</td><td>CPU重载344个有限张量、14维接口与原归一化一致；连续长训练尚在运行</td><td>{link(r/"checks/checkpoint-s0-u3000-audit.json","权重与统计验收")}</td></tr>')
+            evidence_rows.append(f'<tr><td>种子0 · 3000更新</td><td>CPU重载344个有限张量、14维接口与原归一化一致；当前完整轨迹状态见训练表</td><td>{link(r/"checks/checkpoint-s0-u3000-audit.json","权重与统计验收")}</td></tr>')
+        if completed_seed0:
+            evidence_rows.append(f'<tr><td>种子0 · 完整6000轮</td><td>18000次更新完成；三个预算点权重有限，原始与派生各50文件哈希不变</td><td>{link(r/"checks/training-seed-0-audit.json","完整轨迹单独验收")}</td></tr>')
         evaluation+='<figure><div class="ve-table"><table><thead><tr><th>提前完成的检查</th><th>实际结论</th><th>证据</th></tr></thead><tbody>'+''.join(evidence_rows)+'</tbody></table></div><figcaption>完整清单和中间权重已独立核查；它们不能替代六千轮轨迹完成及真实策略闭环。</figcaption></figure>'
     if (r/'checks/evaluation-contract-review.json').exists():
         evaluation+=f'<p>输入时序复核：save_freq=15是专家路径采样步距，frequency=30是当前ACT不读取的元数据，真实动作由250Hz原生TOPP路径推进。固定队列逐种子调用会重置缓存计数，现按全局回合序号恢复原清理节奏并保留异常强制清理；未改动作、模型输入或任务判据。{link(r/"checks/evaluation-contract-review.json","时序与缓存复核")}。缓存标志回归不是物理策略成绩，真实长队列释放仍由后续逐回合审计确认。</p>'
     if (r/'checks/official-ws-port-lifecycle.json').exists():
         evaluation+=f'<p>连续切换权重的服务预检复核：官方WebSocket传输关闭后，普通bind实测返回EADDRINUSE；与官方asyncio服务一致的SO_REUSEADDR可立即绑定，同时回归确认活动监听端口仍被拒绝。这里只修复本任务预检，不设置SO_REUSEPORT、不停止其他服务；此传输检查没有加载模型，不能作为推理成绩。{link(r/"checks/official-ws-port-lifecycle.json","官方传输实测")} · {link(r/"logs/policy-port-regression.log","端口生命周期回归")}</p>'
+    outcome=read(r/'checks/prior-attempt-outcome.json')
+    if outcome:
+        evaluation+=f'<figure><div class="ve-table"><table><thead><tr><th>原尝试</th><th>退出与进度</th><th>证据及处理</th></tr></thead><tbody><tr><td>种子0</td><td>退出0；6000轮/18000更新完成</td><td>复用同一条连续轨迹；三个权重在CPU验收，随后真实评测</td></tr><tr><td>种子1</td><td>退出{outcome["seed1_exit"]}；追加日志{outcome["seed1_logged_epochs"]}轮/{outcome["seed1_last_logged_updates"]}更新，状态文件停在{outcome["seed1_status_file_epochs"]}轮</td><td>主进程JSON写入时段错误；worker故障文件为空，根因未证明；原件与部分权重保留</td></tr></tbody></table></div><figcaption>异常退出时状态文件可能未刷新，以退出码与追加历史交叉核对，不能把原文件的running当作仍在训练。{link(r/"checks/prior-attempt-outcome.json","交叉核对")}</figcaption></figure>'
+        evaluation+=f'<p>新记录格式保留完整epochs.jsonl，每轮只原子替换简短状态，旧内嵌格式继续可读；这是减少累积日志重复写入，不能宣称修复段错误。原出错时的持久化JSON重构后128次纯Python序列化未复现，不能排除原进程原生堆损坏或硬件因素。{link(r/"checks/json-replay-audit.json","JSON重放边界")}</p>'
+    waiting=pipeline.get('waiting_for_resources')
+    if waiting:
+        evaluation+=f'<p>资源排队：{esc(waiting["job"])} 当前空闲显存{waiting["gpu_free_mib"]}MiB，需要{waiting["minimum_gpu_free_mib"]}MiB；磁盘空闲{waiting["disk_free_bytes"]/1024**3:.2f}GiB，需要{waiting["minimum_disk_free_bytes"]/1024**3:.0f}GiB。满足条件后自动启动，等待也计入本任务保守48小时窗口。</p>'
     if comparison.get('models'):
         rows=[];bars=[]
         for i,v in enumerate(comparison['models']):
@@ -92,7 +113,7 @@ def main():
 <p>保持640×480三相机、14维动作、batch16、学习率1e−5、chunk50、KL10与原任务判据。数据仍为原生40/10划分；原生归一化使用全部50条和末帧填充，包含验证集，按既定协议保留并披露。</p>
 <p>本组显式使用spawn及持久数据worker，并重新训练自己的1000轮参考点；历史权重作为外部参考，不能声称位级复现。先验收真实短训练的更新数、有限权重与worker复用，再开启长训练。监督器提供超时、无进展栈诊断、磁盘保护和本任务进程组管理。</p>
 <p>当前作业监督状态：{esc(supervisor.get('status','准备中'))}；评测流水线：{esc(pipeline.get('status','准备中'))}。{link(r/'supervisor/status.json','PID与耗时台账')} · {link(r/'evaluation-pipeline/status.json','评测排队/结果状态')} · {link(r/'checks/prerequisites.json','运行前验收')} · {link(r/'snapshots/preregistered-plan.json','预登记选择规则')}。训练和完整确认尚未完成时，不发布策略提升结论。</p>
-<p>当前/home可用{resources['home_disk_free_bytes']/1024**3:.2f}GiB；{link(r/'checks/resource-samples.jsonl','每分钟资源采样')}。GPU时长按本任务墙钟占用保守计费，预算48小时；新作业至少保留4GiB空间，运行中低于1.5GiB停止并保留日志。</p>
+<p>当前/home可用{resources['home_disk_free_bytes']/1024**3:.2f}GiB；{link(r/'checks/resource-samples.jsonl','每分钟资源采样')}。GPU时长按本任务墙钟占用保守计费，预算48小时；训练新作业保留4GiB、评测3GiB空间，运行中低于1.5GiB停止并保留日志。</p>
 {evaluation}
 <p>复现问题与处理：原生专家重复筛选会改变接纳队列，因此在观察新模型结果前冻结两组专家证明；采集seed.txt采用已回归验证的原子替换。历史原生卡住的根因仍未确定，spawn协议是本组显式实验条件，不能据此宣称已定位根因。HTML生成成功不代表浏览器版面验收，既有SVGPoint工具故障仍单独记录。</p>
 <p>实验目录：{esc(r)}。原始数据、历史结果和失败尝试全部保留；只做本地Git保存，不推送或创建PR。</p></section>'''
