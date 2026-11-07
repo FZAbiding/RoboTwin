@@ -1,0 +1,92 @@
+{
+  "snapshot_at": "2026-11-07T16:38:39",
+  "stage_run": "/home/xense/src/RoboTwin/data/local-runs/learning-study-r3-20261107-154420",
+  "completed_seed0_audit": {
+    "passed": true,
+    "training_seeds_checked": [
+      0
+    ],
+    "checkpoints": [
+      {
+        "training_seed": 0,
+        "updates": 3000,
+        "epoch_index": 999,
+        "path": "/home/xense/src/RoboTwin/data/local-runs/learning-study-r2-20261107-011547/checkpoints/seed-0/policy_update_3000_seed_0.ckpt",
+        "bytes": 335914246,
+        "sha256": "c29308bd4f551d69f45424cd7dd09f284c1c004bc797294d7a85266e8eb22ea7",
+        "all_tensors_finite": true
+      },
+      {
+        "training_seed": 0,
+        "updates": 9000,
+        "epoch_index": 2999,
+        "path": "/home/xense/src/RoboTwin/data/local-runs/learning-study-r2-20261107-011547/checkpoints/seed-0/policy_update_9000_seed_0.ckpt",
+        "bytes": 335914246,
+        "sha256": "c753285d23ceb1e18b13388350db44247f1d1a214092ac1c23f51511044083c3",
+        "all_tensors_finite": true
+      },
+      {
+        "training_seed": 0,
+        "updates": 18000,
+        "path": "/home/xense/src/RoboTwin/data/local-runs/learning-study-r2-20261107-011547/checkpoints/seed-0/policy_last.ckpt",
+        "sha256": "6c7c6c51a02f1af9f8d2d309a276a53c22fa424cbdf0fd6a10385cb13685efa2",
+        "all_tensors_finite": true
+      }
+    ],
+    "same_training_validation_split": null,
+    "same_normalization": null,
+    "worker_pids_stable": true,
+    "losses_finite": true,
+    "unchanged_raw_hdf5": 50,
+    "unchanged_derived_hdf5": 50,
+    "scope": "Engineering validation only; policy success requires real closed-loop evaluation."
+  },
+  "prior_attempt_outcome": {
+    "previous_run": "/home/xense/src/RoboTwin/data/local-runs/learning-study-r2-20261107-011547",
+    "seed0_exit": 0,
+    "seed0_complete": true,
+    "seed1_exit": -11,
+    "seed1_status_file_epochs": 4201,
+    "seed1_status_file_updates": 12603,
+    "seed1_logged_epochs": 4202,
+    "seed1_last_logged_updates": 12606,
+    "seed1_fault_location": "main process json.encoder while serializing cumulative status; worker fault files empty",
+    "root_cause_proven": false,
+    "partial_seed1_weights_retained_but_not_used_for_selection": true,
+    "monitor_failure": "PermissionError reading exiting worker /proc/fd; transient errors now skipped"
+  },
+  "json_replay": {
+    "passed": true,
+    "replays": 128,
+    "epochs": 4202,
+    "updates": 12606,
+    "serialized_bytes": 2156048,
+    "sha256": "49fa866a9748e6bd0b2d1ec5aacf0f8dd285d94779031b52e4675984fb120305",
+    "seconds": 5.82792782690376,
+    "torch_imported": false,
+    "scope": "Plain JSON values reconstructed from persisted epoch history. No reproduction in128serializations does not exclude prior native heap corruption or hardware faults; no root-cause claim."
+  },
+  "cache_space_recovery": {
+    "files_deleted": 1837,
+    "download_bytes_unlinked": 5068401997,
+    "disk_free_before_bytes": 1676398592,
+    "disk_free_after_bytes": 6749077504,
+    "manifest": "/home/xense/src/RoboTwin/data/local-runs/learning-study-r3-20261107-154420/snapshots/evicted-download-cache-manifest.json",
+    "installed_environment_modified": false,
+    "raw_data_weights_assets_removed": false
+  },
+  "download_cache_manifest_sha256": "49b2a6405538e87606fdcf9abe9e4fd495898b95eb959807a60d8bf2a3db0802",
+  "installed_environment_after_recovery": {
+    "python": "/home/xense/miniforge3/envs/robotwin/bin/python",
+    "prefix": "/home/xense/miniforge3/envs/robotwin",
+    "torch": "2.4.1+cu121",
+    "torch_cuda_runtime": "12.1",
+    "numpy": "1.26.4",
+    "h5py": "3.16.0",
+    "sapien_distribution": "3.0.0b1",
+    "mplib_distribution": "0.2.1",
+    "scope": "Post-cache-eviction import/installed-version check, no CUDA inference initialized."
+  },
+  "regression_tests_passed": 13,
+  "new_model_rollout_status": "waiting for sufficient GPU resources; no new scores claimed"
+}

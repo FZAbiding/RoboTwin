@@ -94,6 +94,12 @@ def main():
     waiting=pipeline.get('waiting_for_resources')
     if waiting:
         evaluation+=f'<p>资源排队：{esc(waiting["job"])} 当前空闲显存{waiting["gpu_free_mib"]}MiB，需要{waiting["minimum_gpu_free_mib"]}MiB；磁盘空闲{waiting["disk_free_bytes"]/1024**3:.2f}GiB，需要{waiting["minimum_disk_free_bytes"]/1024**3:.0f}GiB。满足条件后自动启动，等待也计入本任务保守48小时窗口。</p>'
+    recovery=read(r/'checks/cache-space-recovery.json')
+    if recovery:
+        evaluation+=f'<p>本阶段磁盘一度不足：已先保存逐文件名称/大小/SHA，再仅释放本任务安装时的旧Conda压缩包及pip HTTP下载缓存，共{recovery["files_deleted"]}文件、{recovery["download_bytes_unlinked"]/1024**3:.2f}GiB。解压依赖、安装环境、编译扩展、原始资产/数据、权重和失败记录保留，清理后关键环境导入验证通过。{link(r/"checks/cache-space-recovery.json","回收结果")} · {link(r/"snapshots/evicted-download-cache-manifest.json","下载缓存原哈希清单")} · {link(r/"checks/environment-after-cache-recovery.json","安装环境核对")}</p>'
+    conflict=read(r/'checks/gpu-resource-conflict.json')
+    if conflict and not conflict.get('service_stopped'):
+        evaluation+=f'<p>当前大显存服务为另一个工作目录的serve_policy.py，PID {conflict["pid"]}。已准备本任务队列并请求明确授权后再考虑SIGTERM；未自行终止其他作业。{link(r/"checks/gpu-resource-conflict.json","进程身份与授权状态")}</p>'
     if comparison.get('models'):
         rows=[];bars=[]
         for i,v in enumerate(comparison['models']):
