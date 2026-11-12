@@ -4,7 +4,13 @@
 
 ## 当前授权与版本边界
 
-2026-11-06 用户明确授权：本地提交 Git 保存，禁止推送远端和创建 PR；继续规划器一致性验证及后续受控训练实验，可使用最长 48 小时 GPU 时间，需持续汇报。此授权覆盖旧规则中的本地提交限制。用户已要求不再以 HANDOFF.md 作为执行依据。
+2026-11-12 当前工作目录为 `/home/xense/src/RoboTwin`，远端为 `https://github.com/FZAbiding/RoboTwin.git`，工作分支为 `test/robotwin-experiments`。用户已授权该测试分支本地提交与推送；不向 `main` 新增实验提交，不创建 PR。GitHub API 已核实该远端是公开 fork。
+
+用户决定大型原始数据、转换数据、权重、视频和完整备份保存在本地，不上传 Git、Git LFS 或 Release。原始产物仍位于 `/home/xense/src/RoboTwin-main/data/local-runs/`，ACT 转换数据位于 `/home/xense/src/RoboTwin-main/XPolicyLab/policy/ACT/processed_data/`，上游评测输出位于 `/home/xense/src/RoboTwin-main/eval_result/`；本次没有移动、改写或删除它们。下文历史绝对路径中的 `/home/xense/src/RoboTwin` 指目录改名前的工作区，查找原件时需映射到 `/home/xense/src/RoboTwin-main`。
+
+2026-11-06 的本地提交及 48 小时 GPU 授权属于历史实验范围，不自动启动新作业。用户已要求不再以 HANDOFF.md 作为执行依据。
+
+子模块本地补丁以小型增量 Git bundle 和文本 patch 保存，精确提交恢复方法见 [依赖补丁说明](patches/README.md)。它们不包含模型权重、数据或完整子模块历史；普通递归克隆不能从官方远端获取本地补丁提交，首次恢复须按该说明导入。
 
 初始代码：RoboTwin `ea8b21121ebb3cd201ff5b3fe361944ac94eda3f`，XPolicyLab `fa431ecd893ee706883e64fe5fe1464ec8cd928d`。所有后续改动和实验版本另行记录；原始成绩不重标。
 

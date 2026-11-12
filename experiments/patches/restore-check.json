@@ -1,0 +1,17 @@
+{
+  "status": "passed",
+  "base_commit": "fa431ecd893ee706883e64fe5fe1464ec8cd928d",
+  "restored_commit": "6c1bb42f0302b01d7a1822ffbb00b011fd1905b1",
+  "bundle_bytes": 2365,
+  "bundle_sha256": "dd0232d62dff20653fe02d48dcc5159bf9a9e5386a8ca944e7aaeea875ee4c03",
+  "baseline_did_not_contain_patched_commit": true,
+  "incremental_bundle_named_ref_import": true,
+  "parent_submodule_update_no_fetch": true,
+  "remote_git_transports_disabled_during_update": true,
+  "clean_submodule_worktree": true,
+  "lfs_objects": 1,
+  "lfs_restore": "Original cached object with verified SHA256; new network LFS download not tested.",
+  "restore_issue_and_resolution": "Importing only FETCH_HEAD allowed default submodule update to query upstream. Final procedure imports a named local ref and uses --no-fetch.",
+  "scope": "Code/dependency restore only; no training, inference, simulator or new policy-success claims.",
+  "large_artifacts_uploaded": false
+}

@@ -58,6 +58,8 @@ See [RoboTwin 2.0 Document (Usage - Install & Download)](https://robotwin-platfo
 
 XPolicyLab is embedded as a Git submodule. For a fresh checkout, clone RoboTwin recursively:
 
+> On this `test/robotwin-experiments` reproduction branch, the pinned XPolicyLab commit includes a local patch. Follow the [exact dependency restoration steps](experiments/patches/README.md) before initializing the submodule. See [experiment records](experiments/README.md) for results and limitations. Datasets, checkpoints, and videos are retained locally and are not included in this repository.
+
 ```bash
 git clone --recurse-submodules https://github.com/RoboTwin-Platform/RoboTwin.git
 cd RoboTwin

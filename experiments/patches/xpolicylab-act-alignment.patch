@@ -1,0 +1,147 @@
+From 6c1bb42f0302b01d7a1822ffbb00b011fd1905b1 Mon Sep 17 00:00:00 2001
+From: FZA <55792788+FZAbiding@users.noreply.github.com>
+Date: Fri, 6 Nov 2026 22:14:27 +0800
+Subject: [PATCH] fix(act): preserve native RoboTwin action alignment
+
+---
+ policy/ACT/detr/process_data.py           | 26 +++++++++++---
+ policy/ACT/tests/test_action_alignment.py | 44 +++++++++++++++++++++++
+ policy/ACT/utils.py                       |  2 ++
+ 3 files changed, 67 insertions(+), 5 deletions(-)
+ create mode 100644 policy/ACT/tests/test_action_alignment.py
+
+diff --git a/policy/ACT/detr/process_data.py b/policy/ACT/detr/process_data.py
+index 693530e1..9e24ce5d 100644
+--- a/policy/ACT/detr/process_data.py
++++ b/policy/ACT/detr/process_data.py
+@@ -8,7 +8,7 @@ import json
+ from XPolicyLab.utils.load_file import load_hdf5
+ from XPolicyLab.utils.process_data import pack_robot_state, get_robot_action_dim_info, decode_image_bit
+ 
+-def data_transform(path, episode_num, load_data_dir, save_dir, robot_action_dim_info):
++def data_transform(path, episode_num, load_data_dir, save_dir, robot_action_dim_info, *, image_compression=None):
+     begin = 0
+     floders = os.listdir(path)
+     assert episode_num <= len(floders), "data num not enough"
+@@ -19,6 +19,8 @@ def data_transform(path, episode_num, load_data_dir, save_dir, robot_action_dim_
+     for current_episode in range(episode_num):
+         load_path = os.path.join(load_data_dir, f"data/episode_{current_episode:07d}.hdf5")
+         data = load_hdf5(load_path)
++        with h5py.File(load_path, "r") as source_file:
++            already_aligned = source_file.attrs.get("source_format", "") == "RoboTwin"
+         state_all = pack_robot_state(data, action_type, robot_action_dim_info, source_type="dataset", state_type="state")
+         action_all = pack_robot_state(data, action_type, robot_action_dim_info, source_type="dataset", state_type="action")
+         
+@@ -55,13 +57,24 @@ def data_transform(path, episode_num, load_data_dir, save_dir, robot_action_dim_
+         hdf5path = os.path.join(save_dir, f"episode_{current_episode}.hdf5")
+ 
+         with h5py.File(hdf5path, "w") as f:
++            if already_aligned:
++                f.attrs["action_alignment"] = "state_t_to_next_target"
+             f.create_dataset("action", data=np.array(actions, dtype=np.float32))
+             obs = f.create_group("observations")
+             obs.create_dataset("qpos", data=np.array(qpos, dtype=np.float32))
+             image = obs.create_group("images")
+-            image.create_dataset("cam_head", data=np.stack(cam_head_list), dtype=np.uint8)
+-            image.create_dataset("cam_left_wrist", data=np.stack(cam_left_wrist_list), dtype=np.uint8)
+-            image.create_dataset("cam_right_wrist", data=np.stack(cam_right_wrist_list), dtype=np.uint8)
++            for name, frames in [
++                ("cam_head", cam_head_list),
++                ("cam_left_wrist", cam_left_wrist_list),
++                ("cam_right_wrist", cam_right_wrist_list),
++            ]:
++                pixels = np.stack(frames)
++                # Frame chunks preserve random frame access with lossless compression.
++                options = {} if image_compression is None else {
++                    "compression": image_compression,
++                    "chunks": (1, *pixels.shape[1:]),
++                }
++                image.create_dataset(name, data=pixels, dtype=np.uint8, **options)
+ 
+         begin += 1
+         print(f"ACT: proccess episode {current_episode + 1} success!", end='\r')
+@@ -74,6 +87,8 @@ if __name__ == "__main__":
+     parser.add_argument("ckpt_name", type=str, help="Run name; also selects raw task dir under data/<bench>/",)
+     parser.add_argument("env_cfg_type", type=str, help="The name of the environment config",)
+     parser.add_argument("action_type", type=str, help="The type of action to process (e.g., joint)",)
++    parser.add_argument("--image-compression", choices=("none", "lzf"), default="none",
++                        help="Optional lossless image compression; dimensions and pixels are unchanged.")
+     args = parser.parse_args()
+     
+     bench_name = args.bench_name
+@@ -91,7 +106,8 @@ if __name__ == "__main__":
+     episode_num = len([name for name in os.listdir(raw_episode_dir)
+                        if name.startswith("episode_") and name.endswith(".hdf5")])
+ 
+-    begin = data_transform(raw_episode_dir, episode_num, load_data_dir, save_dir, robot_action_dim_info)
++    begin = data_transform(raw_episode_dir, episode_num, load_data_dir, save_dir, robot_action_dim_info,
++                           image_compression=None if args.image_compression == "none" else args.image_compression)
+ 
+     print()
+ 
+diff --git a/policy/ACT/tests/test_action_alignment.py b/policy/ACT/tests/test_action_alignment.py
+new file mode 100644
+index 00000000..d96dcb43
+--- /dev/null
++++ b/policy/ACT/tests/test_action_alignment.py
+@@ -0,0 +1,44 @@
++"""Protect the observation/target boundary; legacy unmarked inputs stay unchanged."""
++import importlib.util
++from pathlib import Path
++import tempfile
++import unittest
++from unittest.mock import patch
++
++import h5py
++import numpy as np
++
++spec = importlib.util.spec_from_file_location("act_dataset_utils", Path(__file__).parents[1] / "utils.py")
++utils = importlib.util.module_from_spec(spec)
++spec.loader.exec_module(utils)
++
++
++class ActionAlignmentTest(unittest.TestCase):
++    def check_sample(self, marked):
++        with tempfile.TemporaryDirectory() as directory:
++            rows = np.arange(6 * 14, dtype=np.float32).reshape(6, 14)
++            with h5py.File(Path(directory) / "episode_0.hdf5", "w") as file:
++                if marked:
++                    file.attrs["action_alignment"] = "state_t_to_next_target"
++                file.create_dataset("action", data=rows + 100)
++                file.create_dataset("observations/qpos", data=rows)
++                file.create_dataset("observations/images/cam_head", data=np.zeros((6, 8, 8, 3), dtype=np.uint8))
++            stats = {"action_mean": np.zeros(14), "action_std": np.ones(14),
++                     "qpos_mean": np.zeros(14), "qpos_std": np.ones(14)}
++            with patch("numpy.random.choice", return_value=2):
++                dataset = utils.EpisodicDataset([0], directory, ["cam_head"], stats, 6)
++                _, qpos, actions, padding = dataset[0]
++            np.testing.assert_array_equal(qpos.numpy(), rows[2])
++            np.testing.assert_array_equal(actions[0].numpy(), rows[2 if marked else 1] + 100)
++            self.assertEqual(int((~padding).sum()), 4 if marked else 5)
++            self.assertIs(dataset.is_sim, True if marked else None)
++
++    def test_marked_native_targets_match_observation_index(self):
++        self.check_sample(True)
++
++    def test_unmarked_legacy_offset_and_none_flag_are_preserved(self):
++        self.check_sample(False)
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/policy/ACT/utils.py b/policy/ACT/utils.py
+index a851f32c..ec247193 100644
+--- a/policy/ACT/utils.py
++++ b/policy/ACT/utils.py
+@@ -31,6 +31,8 @@ class EpisodicDataset(torch.utils.data.Dataset):
+         dataset_path = os.path.join(self.dataset_dir, f"episode_{episode_id}.hdf5")
+         with h5py.File(dataset_path, "r") as root:
+             is_sim = None
++            if root.attrs.get("action_alignment", "") == "state_t_to_next_target":
++                is_sim = True
+             original_action_shape = root["/action"].shape
+             episode_len = original_action_shape[0]
+             if sample_full_episode:
+-- 
+2.43.0
+
